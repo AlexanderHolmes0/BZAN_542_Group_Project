@@ -1,0 +1,311 @@
+---
+title: "BZAN542_Group_Project"
+author: "Alexander Holmes"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidymodels)
+library(tidyverse)
+library(embed)
+library(stringdist)
+library(probably)
+library(bonsai)
+library(textrecipes)
+library(finetune)
+```
+
+```{r Parallel Processing}
+cores <- parallelly::availableCores(logical = FALSE)
+cl <- parallel::makePSOCKcluster(cores)
+doParallel::registerDoParallel(cl)
+```
+
+
+
+```{r split}
+set.seed(123)
+car_sales <- read.csv('pakwheels_used_car_data_v02.csv',stringsAsFactors = FALSE,na.strings = c("NA",""))
+car_sales <- car_sales |> 
+  mutate(luxury = factor(ifelse(make %in%
+  c("Land", "Porsche","Bentley","Jaguar","Mercedes","Range","Tesla")
+  , 1, 0)),
+  usd = price*0.003541,
+  assembly=replace_na(assembly,"Local"))
+car_sales <- car_sales |> 
+  filter(addref!=7770572)
+car_sales <- car_sales[complete.cases(car_sales),]
+
+kbb_colors_df <- data.frame(
+  color = c("Black", "White", "Silver", "Gray", "Blue", "Red", "Green", "Brown", "Yellow", "Orange","Beige","Maroon","Gold","Bronze","Burgandy","Magenta","Pink","Purple","Navy","Graphite Grey","")
+)
+
+car_sales <- car_sales |> 
+  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color, maxDist = 30),]) |> 
+  mutate(across(where(is.character),as.factor))
+
+
+car_split <- initial_split(car_sales,strata = price)
+car_train <- training(car_split)
+car_test <- testing(car_split)
+
+ggplot(car_train, aes(x = year)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "Year", y = "Count", title = "Distribution of Car Year") +
+  facet_wrap(~ body) +
+  theme_minimal()
+ggplot(car_train, aes(x = usd)) +
+  geom_histogram(binwidth = 10000) +
+  labs(x = "Price", y = "Count", title = "Distribution of Car Price") +
+  theme_minimal()
+ggplot(car_train, aes(x = mileage)) +
+  geom_histogram(binwidth = 10000) +
+  labs(x = "Mileage", y = "Count", title = "Distribution of Car Mileage") +
+  theme_minimal()
+#stacked bar chart
+ggplot(car_train, aes(x = fuel, fill = fuel)) +
+  geom_bar() +
+  labs(x = "Fuel Type", y = "Count", title = "Distribution of Car Fuel Type") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+
+#stacked bar chart
+ggplot(car_train, aes(x = assembly, fill = assembly)) +
+  geom_bar() +
+  labs(x = "Assembly", y = "Count", title = "Distribution of Car Assembly") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+#rotate x axis labels
+ggplot(car_sales,aes(x=body,y=log10(usd),fill=body))+
+  geom_boxplot()+
+  coord_flip()+
+  theme(legend.position = "none")
+
+ggplot(car_sales |> group_by(make) |> summarise(count=n(),average_usd=mean(usd)) |> filter(count>10) |> mutate(make=fct_reorder(make,average_usd)),aes(x=make,y=average_usd,fill=make))+
+  geom_bar(stat='identity')+
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels=scales::dollar)
+
+car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+
+```
+
+```{r recipe}
+car_recipe <- recipe(usd ~ .,data=car_train) |> 
+  step_rm(addref,color,price) |> 
+  step_lencode_glm(all_nominal_predictors(), outcome = vars(usd)) |> 
+  #step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
+  step_other(all_nominal_predictors(),threshold = .3) |> 
+  step_zv(all_predictors()) |>
+  step_normalize(all_numeric_predictors()) |> 
+  step_corr(all_numeric_predictors(), threshold = 0.9)
+juice(prep(car_recipe))
+```
+
+
+```{r workflow}
+car_workflow <- workflow() |> 
+  add_recipe(car_recipe) |> 
+  add_model(linear_reg())
+
+reg_metrics <- metric_set(rmse,mae, rsq)
+
+car_results <- car_workflow |>
+  fit_resamples(resamples = car_folds,control = control_resamples(save_pred = T),metrics = reg_metrics)
+collect_metrics(car_results)
+```
+
+```{r workflow_results}
+cal_plot_regression(car_results, alpha = 1 / 5)
+#talk about leverage!
+```
+```{r}
+
+lgbm_spec <- 
+  boost_tree(trees = tune(), learn_rate = tune(), min_n = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("lightgbm")
+
+lgbm_wflow <- workflow(car_recipe, lgbm_spec)
+
+set.seed(12)
+grid <- 
+  lgbm_wflow %>% 
+  extract_parameter_set_dials() %>% 
+  grid_latin_hypercube(size = 25)
+
+ctrl <- control_grid(save_pred = TRUE,verbose=TRUE)
+
+lgbm_res <-
+  lgbm_wflow %>%
+  tune_grid(
+    resamples = car_folds,
+    control = ctrl,
+    metrics = reg_metrics,
+    grid=grid
+  )
+collect_metrics(lgbm_res)
+show_best(lgbm_res, metric = "rmse")
+lgbm_best <- select_best(lgbm_res, metric = "rmse")
+```
+
+
+```{r}
+
+lgbm_res %>%
+  collect_predictions(
+    parameters = lgbm_best
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+```
+
+```{r Racing}
+set.seed(123)
+lgbm_race_res <-
+  lgbm_wflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 50, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+show_best(lgbm_race_res,metric='rmse')
+
+plot_race(lgbm_race_res) + 
+  scale_x_continuous(breaks = pretty_breaks())
+
+lgbm_race_res %>%
+  collect_predictions(
+    parameters = select_best(lgbm_race_res,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+```
+
+```{r lock down best}
+best_param <- select_best(lgbm_race_res,metric='rmse')
+
+final_wflow <- 
+  lgbm_wflow %>%
+  finalize_workflow(best_param)
+
+```
+
+```{r final model}
+set.seed(123)
+final_res <- 
+  final_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_res |> collect_metrics()
+```
+
+
+
+# Workflow Sets
+
+```{r}
+base_recipe <- 
+   recipe(usd ~ ., data = car_train) |> 
+  step_rm(addref,color,price) |> 
+  step_lencode_glm(all_nominal_predictors(), outcome = vars(usd)) |> 
+   step_normalize(all_predictors()) 
+
+filter_rec <- 
+   base_recipe %>% 
+   step_corr(all_numeric_predictors(), threshold = tune())
+
+pca_rec <- base_recipe %>% 
+   step_pca(all_numeric_predictors(), num_comp = tune()) |> 
+  step_normalize(all_predictors())
+```
+
+```{r}
+library(rules)
+library(baguette)
+
+regularized_spec <- 
+   linear_reg(penalty = tune(), mixture = tune()) %>% 
+   set_engine("glmnet")
+
+cart_spec <- 
+   decision_tree(cost_complexity = tune(), min_n = tune()) %>% 
+   set_engine("rpart") %>% 
+   set_mode("regression")
+
+nnet_spec <- 
+   mlp(hidden_units = tune(), penalty = tune(), epochs = tune()) %>% 
+   set_engine("nnet", MaxNWts = 2600) %>% 
+   set_mode("regression")
+
+rf_spec <- 
+   rand_forest(mtry = tune(), min_n = tune(), trees = 1000) %>% 
+   set_engine("ranger") %>% 
+   set_mode("regression")
+
+xgb_spec <- 
+   boost_tree(tree_depth = tune(), learn_rate = tune(), loss_reduction = tune(), 
+              min_n = tune(), sample_size = tune(), trees = tune()) %>% 
+   set_engine("xgboost") %>% 
+   set_mode("regression")
+```
+
+
+```{r}
+wf_set <- 
+   workflow_set(
+      preproc = list(simple = base_recipe, filter=filter_rec,
+                     pca = pca_rec),
+      models = list(glmnet = regularized_spec, cart = cart_spec, 
+                    nnet = nnet_spec, RF = rf_spec, xgboost = xgb_spec),
+      cross = TRUE
+   )
+
+wf_set <- 
+   wf_set %>% 
+   anti_join(tibble(wflow_id = c("pca_glmnet", "filter_glmnet")), 
+             by = "wflow_id")
+```
+
+
+
+```{r fit the set}
+wf_set <- 
+   wf_set %>% 
+   workflow_map("tune_grid", resamples = car_folds, grid = 10, 
+                metrics = reg_metrics, verbose = TRUE,seed=123) 
+```
+
+```{r set racing}
+race_results <-
+   all_workflows %>%
+   workflow_map(
+      "tune_race_anova",
+      seed = 1503,
+      resamples = car_folds,
+      grid = 25,
+      control = grid_ctrl
+   )
+```
+
