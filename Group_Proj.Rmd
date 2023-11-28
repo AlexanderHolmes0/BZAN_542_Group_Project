@@ -15,6 +15,17 @@ library(probably)
 library(bonsai)
 library(textrecipes)
 library(finetune)
+#load("Trained_Models.RData")
+```
+
+```{r pkgs}
+#pkgs <- 
+#  c("bonsai", "doParallel", "embed", "finetune", "lightgbm", "lme4",
+#    "plumber", "probably", "ranger", "rpart", "rpart.plot", "rules",
+#    "splines2", "stacks", "text2vec", "textrecipes", "tidymodels", 
+#    "vetiver", "remotes","textrecipes")
+#
+#install.packages(pkgs)
 ```
 
 ```{r Parallel Processing}
@@ -36,6 +47,7 @@ car_sales <- car_sales |>
   assembly=replace_na(assembly,"Local"))
 car_sales <- car_sales |> 
   filter(addref!=7770572)
+
 car_sales <- car_sales[complete.cases(car_sales),]
 
 kbb_colors_df <- data.frame(
@@ -43,26 +55,28 @@ kbb_colors_df <- data.frame(
 )
 
 car_sales <- car_sales |> 
-  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color, maxDist = 30),]) |> 
+  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color, maxDist = 10),]) |> 
   mutate(across(where(is.character),as.factor))
 
 
 car_split <- initial_split(car_sales,strata = price)
 car_train <- training(car_split)
 car_test <- testing(car_split)
+car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+
 
 ggplot(car_train, aes(x = year)) +
   geom_histogram(binwidth = 1) +
   labs(x = "Year", y = "Count", title = "Distribution of Car Year") +
   facet_wrap(~ body) +
   theme_minimal()
-ggplot(car_train, aes(x = usd)) +
-  geom_histogram(binwidth = 10000) +
-  labs(x = "Price", y = "Count", title = "Distribution of Car Price") +
+ggplot(car_train, aes(x = log(usd))) +
+  geom_histogram() +
+  labs(x = "Price (USD)", y = "Count", title = "Distribution of Car Price") +
   theme_minimal()
 ggplot(car_train, aes(x = mileage)) +
   geom_histogram(binwidth = 10000) +
-  labs(x = "Mileage", y = "Count", title = "Distribution of Car Mileage") +
+  labs(x = "Mileage (Km)", y = "Count", title = "Distribution of Car Mileage") +
   theme_minimal()
 #stacked bar chart
 ggplot(car_train, aes(x = fuel, fill = fuel)) +
@@ -72,7 +86,7 @@ ggplot(car_train, aes(x = fuel, fill = fuel)) +
   theme_minimal()
 
 #stacked bar chart
-ggplot(car_train, aes(x = assembly, fill = assembly)) +
+ggplot(car_sales, aes(x = assembly, fill = assembly)) +
   geom_bar() +
   labs(x = "Assembly", y = "Count", title = "Distribution of Car Assembly") +
   facet_wrap(~ transmission) +
@@ -89,15 +103,16 @@ ggplot(car_sales |> group_by(make) |> summarise(count=n(),average_usd=mean(usd))
   theme(legend.position = "none")+
   scale_y_continuous(labels=scales::dollar)
 
-car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+ggplot(car_sales, aes(x=as.factor(fuzzy_colors),y=log(usd)))+
+  geom_boxplot()+coord_flip()+theme(legend.position = "none")+labs(x="Color",y="Price (USD)")
 
 ```
 
 ```{r recipe}
 car_recipe <- recipe(usd ~ .,data=car_train) |> 
   step_rm(addref,color,price) |> 
-  step_lencode_glm(all_nominal_predictors(), outcome = vars(usd)) |> 
-  #step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
+  step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,-assembly ,outcome = vars(usd)) |> 
+  step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
   step_other(all_nominal_predictors(),threshold = .3) |> 
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |> 
@@ -147,9 +162,11 @@ lgbm_res <-
     metrics = reg_metrics,
     grid=grid
   )
+
 collect_metrics(lgbm_res)
 show_best(lgbm_res, metric = "rmse")
 lgbm_best <- select_best(lgbm_res, metric = "rmse")
+#select_best(lgbm_res, metric = "rmse")
 ```
 
 
@@ -222,6 +239,64 @@ final_res |> collect_metrics()
 ```
 
 
+#lets see if XGBoost can do anybetter/?
+
+```{r}
+xgb_spec <- boost_tree( #model spec basically showing what we wanna do    
+    trees = tune(),
+    min_n = tune(),
+    mtry = tune(),
+    learn_rate = tune(),
+    sample_size = tune(),
+    tree_depth = tune(),
+    loss_reduction = tune()) %>% 
+  set_engine("xgboost") %>% #see ?set_engine for a full list of possibilites
+  set_mode("regression")
+
+xgb_wf <- workflow() %>%  #add the preproc with the model spec
+  add_recipe(car_recipe) %>% 
+  add_model(xgb_spec)
+
+xgb_grid <- grid_latin_hypercube( 
+  #cover all bases in the ~7 dimensional space of possible hyper params
+  trees(range = c(300,2400)),
+  tree_depth(range = c(4,20)),
+  min_n(range = c(1,10)),
+  loss_reduction(),
+  sample_size = sample_prop(range = c(.4,.9)),
+  mtry(range = c(4,12)),
+  learn_rate(range = c(-4,-1)),
+  size = 10
+  )
+
+xgb_rs <- tune_race_anova(
+  object = xgb_wf,
+  resamples = car_folds,
+  metrics = metric_set(rmse),
+  grid = xgb_grid, #number of each different hyperparams to test out
+  control = control_race(verbose_elim = TRUE)
+)
+
+plot_race(xgb_rs) + 
+  scale_x_continuous(breaks = pretty_breaks())
+show_best(xgb_rs,metric='rmse')
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Workflow Sets
 
@@ -229,8 +304,8 @@ final_res |> collect_metrics()
 base_recipe <- 
    recipe(usd ~ ., data = car_train) |> 
   step_rm(addref,color,price) |> 
-  step_lencode_glm(all_nominal_predictors(), outcome = vars(usd)) |> 
-   step_normalize(all_predictors()) 
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(usd)) |> 
+  step_normalize(all_predictors()) 
 
 filter_rec <- 
    base_recipe %>% 
@@ -275,10 +350,9 @@ xgb_spec <-
 ```{r}
 wf_set <- 
    workflow_set(
-      preproc = list(simple = base_recipe, filter=filter_rec,
-                     pca = pca_rec),
+      preproc = list(car_recipe),
       models = list(glmnet = regularized_spec, cart = cart_spec, 
-                    nnet = nnet_spec, RF = rf_spec, xgboost = xgb_spec),
+                    RF = rf_spec, xgboost = xgb_spec),
       cross = TRUE
    )
 
@@ -291,10 +365,32 @@ wf_set <-
 
 
 ```{r fit the set}
-wf_set <- 
+grid_ctrl <- control_grid(save_pred = TRUE, save_workflow = TRUE)
+
+wf_set_res <- 
    wf_set %>% 
-   workflow_map("tune_grid", resamples = car_folds, grid = 10, 
-                metrics = reg_metrics, verbose = TRUE,seed=123) 
+   workflow_map("tune_grid", resamples = car_folds, grid = 5, 
+                metrics = reg_metrics, control = grid_ctrl,verbose = TRUE,seed=123) 
+autoplot(wf_set_res, metric = "rmse")
+
+library(stacks)
+
+wf_set_stack <- 
+  stacks() %>% 
+  add_candidates(wf_set_res)
+
+set.seed(122)
+wf_set_stack_res <- blend_predictions(wf_set_stack)
+autoplot(wf_set_stack_res)
+autoplot(wf_set_stack_res, type = "weights")
+wf_set_stack_res <- fit_members(wf_set_stack_res)
+
+autoplot(wf_set_stack_res,type="performance")
+
+predict(wf_set_stack_res, car_test) %>% 
+  bind_cols(car_test) %>% 
+  cal_plot_regression(truth = usd, estimate = .pred, alpha = 1 / 4)
+
 ```
 
 ```{r set racing}
