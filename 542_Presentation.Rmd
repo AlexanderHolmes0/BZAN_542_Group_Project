@@ -1,0 +1,483 @@
+---
+title: "542 Group Presentation"
+subtitle: "Pakistani Car Sales"
+author: "Lucas McPherron, Alex Holmes, Tyler Dykes, Aria Sajjad"
+institute: "RStudio, PBC"
+date: "`r Sys.Date()`"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+
+
+---
+class: inverse, left, middle
+
+# Data Cleaning
+--
+
+>- Set seed to ensure same results
+>- Defined what a luxury car is for study
+>- Changed price to USD
+>- Filtered out unnhelpful information
+>- Created data frame to view colors more accurately
+
+
+--
+__Prepare Data for Testing__
+
+car_split <- initial_split(car_sales,strata = price)
+
+car_train <- training(car_split)
+
+car_test <- testing(car_split)
+
+car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+
+---
+class: inverse, center, middle
+
+# Some Initial Graphics and Discoveries
+
+---
+class: inverse, center, middle
+
+# Histtogram of Count of Cars by Year
+
+```{r, car_sales, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = year)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "Year", y = "Count") +
+  facet_wrap(~ body) +
+  theme_minimal()
+
+```
+
+---
+class: inverse, center, middle
+
+# Histogram of Distribution of Car Price
+
+```{r, car_sales1, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = log(usd))) +
+  geom_histogram() +
+  labs(x = "Price (USD)", y = "Count") +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Histogram of Distribution of Car Mileage
+
+```{r, car_sales2, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = mileage)) +
+  geom_histogram(binwidth = 10000) +
+  labs(x = "Mileage (Km)", y = "Count") +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Barchart Distribution of Car Fuel Type
+
+```{r, car_sales3, fig.cap="Some plots", echo=FALSE}
+# stacked bar chart
+ggplot(car_train, aes(x = fuel, fill = fuel)) +
+  geom_bar() +
+  labs(x = "Fuel Type", y = "Count") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Barchart of Assembly Type by Count
+
+```{r, car_sales4, fig.cap="Some plots", echo=FALSE}
+# stacked bar chart
+ggplot(car_sales, aes(x = assembly, fill = assembly)) +
+  geom_bar() +
+  labs(x = "Assembly", y = "Count", title = "Distribution of Car Assembly") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Boxplot of Log Dollars by Car Body
+
+```{r, car_sales5, fig.cap="Some plots", echo=FALSE}
+# rotate x axis labels
+ggplot(car_sales,aes(x=body,y=log10(usd),fill=body))+
+  geom_boxplot()+
+  coord_flip()+
+  theme(legend.position = "none")
+```
+
+---
+class: inverse, center, middle
+
+# Barchart of Average Price by Car Make
+
+```{r, car_sales6, fig.cap="Some plots", echo=FALSE}
+ggplot(car_sales  %>%  group_by(make)  %>%  summarise(count=n(),average_usd=mean(usd))  %>%  filter(count>10) %>%  mutate(make=fct_reorder(make,average_usd)),aes(x=make,y=average_usd,fill=make))+
+  geom_bar(stat='identity')+
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels=scales::dollar)
+```
+
+---
+class: inverse, center, middle
+
+# Boxplot of Log Dollars by Color of Car
+
+```{r, car_sales7, fig.cap="Some plots", echo=FALSE}
+ggplot(car_sales, aes(x=as.factor(fuzzy_colors),y=log(usd)))+
+  geom_boxplot()+coord_flip()+theme(legend.position = "none")+labs(x="Color",y="Price (USD)")
+```
+
+---
+class: inverse, center, left
+
+# Car Recipe
+
+car_recipe <- recipe(usd ~ .,data=car_train) %>%  
+  step_rm(addref,color,price)  %>% 
+  step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,-assembly ,outcome = vars(usd))  %>%  
+  step_dummy(all_nominal_predictors(),one_hot = TRUE)  %>% 
+  step_other(all_nominal_predictors(),threshold = .3)  %>%  
+  step_zv(all_predictors())  %>% 
+  step_normalize(all_numeric_predictors())  %>%  
+  step_corr(all_numeric_predictors(), threshold = 0.9)
+  
+--
+
+```{r, car_recipe, fig.cap="Some plots", echo=FALSE}
+
+car_recipe <- recipe(usd ~ .,data=car_train) %>%  
+  step_rm(addref,color,price)  %>% 
+  step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,-assembly ,outcome = vars(usd))  %>%  
+  step_dummy(all_nominal_predictors(),one_hot = TRUE)  %>% 
+  step_other(all_nominal_predictors(),threshold = .3)  %>%  
+  step_zv(all_predictors())  %>% 
+  step_normalize(all_numeric_predictors())  %>%  
+  step_corr(all_numeric_predictors(), threshold = 0.9)
+juice(prep(car_recipe))
+
+```
+
+
+---
+class: inverse, center, middle
+
+# Workflow
+
+car_workflow <- workflow()  %>%  
+  add_recipe(car_recipe)  %>%  
+  add_model(linear_reg())
+
+reg_metrics <- metric_set(rmse,mae, rsq)
+
+car_results <- car_workflow  %>% 
+  fit_resamples(resamples = car_folds,control = control_resamples(save_pred = T),metrics = reg_metrics)
+collect_metrics(car_results)
+
+
+```{r, workflow_results, echo=FALSE}
+cal_plot_regression(car_results, alpha = 1 / 5)
+#talk about leverage!
+```
+
+---
+
+# Tree Model
+
+lgbm_spec <- 
+  boost_tree(trees = tune(), learn_rate = tune(), min_n = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("lightgbm")
+
+lgbm_wflow <- workflow(car_recipe, lgbm_spec)
+
+set.seed(12)
+grid <- 
+  lgbm_wflow %>% 
+  extract_parameter_set_dials() %>% 
+  grid_latin_hypercube(size = 25)
+
+ctrl <- control_grid(save_pred = TRUE,verbose=TRUE)
+
+lgbm_res <-
+  lgbm_wflow %>%
+  tune_grid(
+    resamples = car_folds,
+    control = ctrl,
+    metrics = reg_metrics,
+    grid=grid
+  )
+
+collect_metrics(lgbm_res)
+show_best(lgbm_res, metric = "rmse")
+lgbm_best <- select_best(lgbm_res, metric = "rmse")
+
+lgbm_res %>%
+  collect_predictions(
+    parameters = lgbm_best
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+  
+---
+
+# Racing
+
+lgbm_race_res <-
+  lgbm_wflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 50, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+show_best(lgbm_race_res,metric='rmse')
+
+plot_race(lgbm_race_res) + 
+  scale_x_continuous(breaks = pretty_breaks())
+
+lgbm_race_res %>%
+  collect_predictions(
+    parameters = select_best(lgbm_race_res,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+  
+best_param <- select_best(lgbm_race_res,metric='rmse')
+
+final_wflow <- 
+  lgbm_wflow %>%
+  finalize_workflow(best_param)
+  
+set.seed(123)
+final_res <- 
+  final_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_res  %>%  collect_metrics()
+
+---
+
+# XGBoost
+
+xgb_spec <- boost_tree( #model spec basically showing what we wanna do    
+    trees = tune(),
+    min_n = tune(),
+    mtry = tune(),
+    learn_rate = tune(),
+    sample_size = tune(),
+    tree_depth = tune(),
+    loss_reduction = tune()) %>% 
+  set_engine("xgboost") %>% #see ?set_engine for a full list of possibilites
+  set_mode("regression")
+
+xgb_wf <- workflow() %>%  #add the preproc with the model spec
+  add_recipe(car_recipe) %>% 
+  add_model(xgb_spec)
+
+xgb_grid <- grid_latin_hypercube( 
+  #cover all bases in the ~7 dimensional space of possible hyper params
+  trees(range = c(300,2400)),
+  tree_depth(range = c(4,20)),
+  min_n(range = c(1,10)),
+  loss_reduction(),
+  sample_size = sample_prop(range = c(.4,.9)),
+  mtry(range = c(4,12)),
+  learn_rate(range = c(-4,-1)),
+  size = 10
+  )
+
+xgb_rs <- tune_race_anova(
+  object = xgb_wf,
+  resamples = car_folds,
+  metrics = metric_set(rmse),
+  grid = xgb_grid, #number of each different hyperparams to test out
+  control = control_race(verbose_elim = TRUE)
+)
+
+plot_race(xgb_rs) + 
+  scale_x_continuous(breaks = pretty_breaks())
+show_best(xgb_rs,metric='rmse')
+
+---
+# Workflow Sets
+
+base_recipe <- 
+   recipe(usd ~ ., data = car_train) %>%  
+  step_rm(addref,color,price) %>%  
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(usd)) %>%  
+  step_normalize(all_predictors()) 
+
+filter_rec <- 
+   base_recipe %>% 
+   step_corr(all_numeric_predictors(), threshold = tune())
+
+pca_rec <- base_recipe %>% 
+   step_pca(all_numeric_predictors(), num_comp = tune()) %>% 
+  step_normalize(all_predictors())
+
+---
+
+# Best of Each Model
+
+library(rules)
+library(baguette)
+
+regularized_spec <- 
+   linear_reg(penalty = tune(), mixture = tune()) %>% 
+   set_engine("glmnet")
+
+cart_spec <- 
+   decision_tree(cost_complexity = tune(), min_n = tune()) %>% 
+   set_engine("rpart") %>% 
+   set_mode("regression")
+
+nnet_spec <- 
+   mlp(hidden_units = tune(), penalty = tune(), epochs = tune()) %>% 
+   set_engine("nnet", MaxNWts = 2600) %>% 
+   set_mode("regression")
+
+rf_spec <- 
+   rand_forest(mtry = tune(), min_n = tune(), trees = 1000) %>% 
+   set_engine("ranger") %>% 
+   set_mode("regression")
+
+xgb_spec <- 
+   boost_tree(tree_depth = tune(), learn_rate = tune(), loss_reduction = tune(), 
+              min_n = tune(), sample_size = tune(), trees = tune()) %>% 
+   set_engine("xgboost") %>% 
+   set_mode("regression")
+
+---
+
+# Workflow Set
+
+wf_set <- 
+   workflow_set(
+      preproc = list(car_recipe),
+      models = list(glmnet = regularized_spec, cart = cart_spec, 
+                    RF = rf_spec, xgboost = xgb_spec),
+      cross = TRUE
+   )
+
+wf_set <- 
+   wf_set %>% 
+   anti_join(tibble(wflow_id = c("pca_glmnet", "filter_glmnet")), 
+             by = "wflow_id")
+             
+--
+
+# Workflow Fit
+
+grid_ctrl <- control_grid(save_pred = TRUE, save_workflow = TRUE)
+
+wf_set_res <- 
+   wf_set %>% 
+   workflow_map("tune_grid", resamples = car_folds, grid = 5, 
+                metrics = reg_metrics, control = grid_ctrl,verbose = TRUE,seed=123) 
+autoplot(wf_set_res, metric = "rmse")
+
+library(stacks)
+
+wf_set_stack <- 
+  stacks() %>% 
+  add_candidates(wf_set_res)
+
+set.seed(122)
+wf_set_stack_res <- blend_predictions(wf_set_stack)
+autoplot(wf_set_stack_res)
+autoplot(wf_set_stack_res, type = "weights")
+wf_set_stack_res <- fit_members(wf_set_stack_res)
+
+autoplot(wf_set_stack_res,type="performance")
+
+predict(wf_set_stack_res, car_test) %>% 
+  bind_cols(car_test) %>% 
+  cal_plot_regression(truth = usd, estimate = .pred, alpha = 1 / 4)
+  
+--
+
+# Race Results
+
+race_results <-
+   all_workflows %>%
+   workflow_map(
+      "tune_race_anova",
+      seed = 1503,
+      resamples = car_folds,
+      grid = 25,
+      control = grid_ctrl
+   )
+
+
+---
+
+---
+
+# remark.js vs xaringan
+
+Some differences between using remark.js (left) and using **xaringan** (right):
+
+.pull-left[
+1. Start with a boilerplate HTML file;
+
+1. Plain Markdown;
+
+1. Write JavaScript to autoplay slides;
+
+1. Manually configure MathJax;
+
+1. Highlight code with `*`;
+
+1. Edit Markdown source and refresh browser to see updated slides;
+]
+
+.pull-right[
+1. Start with an R Markdown document;
+
+1. R Markdown (can embed R/other code chunks);
+
+1. Provide an option `autoplay`;
+
+1. MathJax just works;<sup>*</sup>
+
+1. Highlight code with `{{}}`;
+
+1. The RStudio addin "Infinite Moon Reader" automatically refreshes slides on changes;
+]
+
+.footnote[[*] Not really. See next page.]
+
+---
