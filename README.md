@@ -19,7 +19,7 @@ Welcome to the comprehensive analysis of used car data using various machine lea
 13. [GitHub Repository Structure](#github-repository-structure)
 
 ## Installation
-To replicate the analysis, ensure you have the required packages installed. Uncomment and run the following code to install the necessary packages:
+To replicate the analysis, ensure you have the required packages installed. Run the following code to install the necessary packages once:
 
 ```R
 pkgs <- 
