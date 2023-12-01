@@ -7,13 +7,13 @@ This R code covers a comprehensive analysis of used car data using various machi
 To replicate the analysis, ensure you have the required packages installed. Uncomment and run the following code to install the necessary packages:
 
 ```R
-#pkgs <- 
-#  c("bonsai", "doParallel", "embed", "finetune", "lightgbm", "lme4",
-#    "plumber", "probably", "ranger", "rpart", "rpart.plot", "rules",
-#    "splines2", "stacks", "text2vec", "textrecipes", "tidymodels", 
-#    "vetiver", "remotes","textrecipes")
-#
-#install.packages(pkgs)
+pkgs <- 
+  c("bonsai", "doParallel", "embed", "finetune", "lightgbm", "lme4",
+    "plumber", "probably", "ranger", "rpart", "rpart.plot", "rules",
+    "splines2", "stacks", "text2vec", "textrecipes", "tidymodels", 
+    "vetiver", "remotes","textrecipes")
+
+install.packages(pkgs)
 ```
 
 ## Parallel Processing
