@@ -1,4 +1,4 @@
-#BZAN 542 Group Project
+# BZAN 542 Group Project
 
 ## Introduction
 Welcome to the comprehensive analysis of used car data using various machine learning techniques and workflows in R. This repository dives deep into the world of predictive modeling and data exploration, showcasing the power of packages such as `tidymodels`, `embed`, `stringdist`, `probably`, `bonsai`, `textrecipes`, and `finetune`. The analysis covers everything from initial data loading to model evaluation and comparison.
