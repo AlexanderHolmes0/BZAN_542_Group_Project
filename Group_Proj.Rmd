@@ -15,7 +15,10 @@ library(probably)
 library(bonsai)
 library(textrecipes)
 library(finetune)
-#load("Trained_Models.RData")
+library(agua)
+library(plotly)
+theme_set(theme_bw())
+#load("Stacked_Models.RData")
 ```
 
 ```{r pkgs}
@@ -23,7 +26,7 @@ library(finetune)
 #  c("bonsai", "doParallel", "embed", "finetune", "lightgbm", "lme4",
 #    "plumber", "probably", "ranger", "rpart", "rpart.plot", "rules",
 #    "splines2", "stacks", "text2vec", "textrecipes", "tidymodels", 
-#    "vetiver", "remotes","textrecipes")
+#    "vetiver", "remotes","textrecipes","agua")
 #
 #install.packages(pkgs)
 ```
@@ -44,6 +47,8 @@ car_sales <- car_sales |>
   c("Land", "Porsche","Bentley","Jaguar","Mercedes","Range","Tesla")
   , 1, 0)),
   usd = price*0.003541,
+  miles = mileage*0.621371,
+  
   assembly=replace_na(assembly,"Local"))
 car_sales <- car_sales |> 
   filter(addref!=7770572)
@@ -55,7 +60,7 @@ kbb_colors_df <- data.frame(
 )
 
 car_sales <- car_sales |> 
-  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color, maxDist = 10),]) |> 
+  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color,method = 'jaccard',maxDist = 11),]) |> 
   mutate(across(where(is.character),as.factor))
 
 
@@ -105,6 +110,26 @@ ggplot(car_sales |> group_by(make) |> summarise(count=n(),average_usd=mean(usd))
 
 ggplot(car_sales, aes(x=as.factor(fuzzy_colors),y=log(usd)))+
   geom_boxplot()+coord_flip()+theme(legend.position = "none")+labs(x="Color",y="Price (USD)")
+#more exploratory data analysis plots not by make; there are other columns like mileage and price
+
+#scatterplot
+ggplot(car_train, aes(x = mileage, y = usd)) +
+  geom_point() +
+  geom_smooth()+
+  labs(x = "Mileage (Km)", y = "Price (USD)", title = "Price vs Mileage") +
+  theme_minimal()
+#scatterplot
+ggplot(car_train, aes(x = mileage, y = log(usd))) +
+  geom_point(alpha=.1) +
+  geom_smooth()+
+  labs(x = "Mileage (KM)", y = "Log (USD)", title = "Price vs Year") +
+  theme_minimal()
+#scatterplot
+ggplot(car_train, aes(x = miles, y = usd)) +
+  geom_point() +
+  geom_smooth()+
+  labs(x = "Miles", y = "Price (USD)", title = "Price vs Year") +
+  theme_minimal()
 
 ```
 
@@ -117,26 +142,46 @@ car_recipe <- recipe(usd ~ .,data=car_train) |>
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |> 
   step_corr(all_numeric_predictors(), threshold = 0.9)
+
 juice(prep(car_recipe))
 ```
 
 
 ```{r workflow}
+glmnet_spec <- linear_reg(penalty = tune(),
+                        mixture = tune()) %>%
+  set_engine("glmnet")
+
 car_workflow <- workflow() |> 
   add_recipe(car_recipe) |> 
-  add_model(linear_reg())
+  add_model(glmnet_spec)
 
 reg_metrics <- metric_set(rmse,mae, rsq)
 
 car_results <- car_workflow |>
-  fit_resamples(resamples = car_folds,control = control_resamples(save_pred = T),metrics = reg_metrics)
+  tune_grid(resamples = car_folds,
+                grid = 25,
+                control = control_resamples(save_pred = T),
+                metrics = reg_metrics)
 collect_metrics(car_results)
+glmnet_best <- car_results %>% select_by_one_std_err(mixture, metric = "rmse")
+
 ```
 
 ```{r workflow_results}
 cal_plot_regression(car_results, alpha = 1 / 5)
+car_results %>%
+  collect_predictions(
+    parameters = glmnet_best
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
 #talk about leverage!
 ```
+
 ```{r}
 
 lgbm_spec <- 
@@ -152,6 +197,13 @@ grid <-
   extract_parameter_set_dials() %>% 
   grid_latin_hypercube(size = 25)
 
+#visualize the grid in 3d space with plotly and tooltip
+plot_ly(grid, x = ~trees, y = ~log10(learn_rate), z = ~min_n) %>%
+  add_markers(color = ~trees) %>%
+  layout(scene = list(xaxis = list(title = "Trees"),
+                      yaxis = list(title = "Learn Rate"),
+                      zaxis = list(title = "Min N")))
+
 ctrl <- control_grid(save_pred = TRUE,verbose=TRUE)
 
 lgbm_res <-
@@ -164,14 +216,17 @@ lgbm_res <-
   )
 
 collect_metrics(lgbm_res)
-show_best(lgbm_res, metric = "rmse")
+show_best(lgbm_res, metric = c("rmse"))
+show_best(lgbm_res, metric = c("rsq"))
 lgbm_best <- select_best(lgbm_res, metric = "rmse")
+select_by_one_std_err(lgbm_res, metric = "rmse",desc(trees))
 #select_best(lgbm_res, metric = "rmse")
+
+
 ```
 
 
 ```{r}
-
 lgbm_res %>%
   collect_predictions(
     parameters = lgbm_best
@@ -181,6 +236,7 @@ lgbm_res %>%
     estimate = .pred,
     alpha = 1 / 3
   )
+autoplot(lgbm_res,metric = "rmse")
 ```
 
 ```{r Racing}
@@ -189,7 +245,7 @@ lgbm_race_res <-
   lgbm_wflow %>%
   tune_race_anova(
     resamples = car_folds,
-    grid = 50, 
+    grid = grid, 
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
@@ -285,16 +341,31 @@ show_best(xgb_rs,metric='rmse')
 
 
 
+# H20 AutoML
 
+```{r,warning=FALSE}
+h2o_start()
 
+# Demonstrate fitting parsnip models: 
+# Specify the type of model and the h2o engine 
+# not run 
+auto_spec_refit <-
+  auto_ml() %>%
+  set_engine("h2o", 
+             max_runtime_secs = 60, 
+             save_data = TRUE,
+             keep_cross_validation_predictions = TRUE) %>%
+  set_mode("regression")
 
+auto_wflow_refit <-
+  workflow() %>%
+  add_model(auto_spec_refit) %>%
+  add_recipe(car_recipe)
 
-
-
-
-
-
-
+first_auto <- fit(auto_wflow_refit, data = car_train)
+# fit another 60 seconds 
+second_auto <- refit(first_auto, max_runtime_secs = 60)
+```
 
 
 
@@ -390,6 +461,12 @@ autoplot(wf_set_stack_res,type="performance")
 predict(wf_set_stack_res, car_test) %>% 
   bind_cols(car_test) %>% 
   cal_plot_regression(truth = usd, estimate = .pred, alpha = 1 / 4)
+
+stack_pred <- predict(wf_set_stack_res, car_test) |> 
+  bind_cols(car_test)
+
+stack_pred |> 
+  rmse(truth = usd, estimate = .pred)
 
 ```
 
