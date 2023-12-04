@@ -1,0 +1,610 @@
+---
+title: "542 Group Presentation"
+subtitle: "Pakistani Car Sales"
+author: "Lucas McPherron, Alex Holmes, Tyler Dykes, Aria Sajjad"
+institute: "RStudio, PBC"
+date: "`r Sys.Date()`"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+
+---
+class: inverse, left, middle
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dbscan)
+library(tidymodels)
+library(tidyverse)
+library(embed)
+library(stringdist)
+library(probably)
+library(bonsai)
+library(textrecipes)
+library(finetune)
+library(xaringan)
+library(gridExtra)
+library(haven)
+library(plotly)
+library(ggplot2)
+library(dplyr)
+library(workflows)
+library(readr)
+library(tidyr)
+library(rmarkdown)
+library(tinytex)
+library(webshot)
+library(webshot2)
+library(rstatix)
+library(car)
+library(forcats)
+library(emmeans)
+library(multcomp)
+library(maps)
+library(tigris)
+library(leaflet)
+library(readxl)
+library(Matrix)
+library(recipes)
+library(xgboost)
+#load("Trained_Models.RData")
+cores <- parallelly::availableCores(logical = FALSE)
+cl <- parallel::makePSOCKcluster(cores)
+doParallel::registerDoParallel(cl)
+
+set.seed(123)
+car_sales <- read_csv("~/Desktop/MSBAProgram/pakwheels_used_car_data_v02.csv")
+car_sales <- car_sales %>% 
+  mutate(luxury = factor(ifelse(make %in%
+  c("Land", "Porsche","Bentley","Jaguar","Mercedes","Range","Tesla")
+  , 1, 0)),
+  usd = price*0.003541,
+  assembly=replace_na(assembly,"Local"))
+car_sales <- car_sales %>%  
+  filter(addref!=7770572)
+
+car_sales <- car_sales[complete.cases(car_sales),]
+
+kbb_colors_df <- data.frame(
+  color = c("Black", "White", "Silver", "Gray", "Blue", "Red", "Green", "Brown", "Yellow", "Orange","Beige","Maroon","Gold","Bronze","Burgandy","Magenta","Pink","Purple","Navy","Graphite Grey","")
+)
+
+car_sales <- car_sales %>% 
+  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color, maxDist = 10),]) %>%  
+  mutate(across(where(is.character),as.factor))
+
+
+car_split <- initial_split(car_sales,strata = price)
+car_train <- training(car_split)
+car_test <- testing(car_split)
+car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+
+
+```
+
+# Data Cleaning
+--
+
+>- Set seed to ensure same results
+>- Defined what a luxury car is for study
+>- Changed price to USD
+>- Filtered out unnhelpful information
+>- Created data frame to view colors more accurately
+
+
+--
+__Prepare Data for Testing__
+
+car_split <- initial_split(car_sales,strata = price)
+
+car_train <- training(car_split)
+
+car_test <- testing(car_split)
+
+car_folds <- vfold_cv(car_train, v = 5, strata = usd)
+
+---
+class: inverse, center, middle
+
+# Some Initial Graphics and Discoveries
+
+---
+class: inverse, center, middle
+
+# Histogram of Count of Cars by Year
+
+```{r, car_sales, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = year)) +
+  geom_histogram(binwidth = 1) +
+  labs(x = "Year", y = "Count") +
+  facet_wrap(~ body) +
+  theme_minimal()
+
+```
+--
+
+# Data Skewed Left, so we're seeing an increase as time progresses
+
+
+---
+class: inverse, center, middle
+
+# Histogram of Distribution of Car Price
+>- Basically normally distributed due to log transformation
+>- Centered around 9 log US dollars with peaks of count at 6000 cars
+
+```{r, car_sales1, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = log(usd))) +
+  geom_histogram() +
+  labs(x = "Price (USD)", y = "Count") +
+  theme_minimal()
+```
+
+
+
+---
+class: inverse, center, middle
+
+# Histogram of Distribution of Car Mileage
+>- Skewed right with median at 80,000 kilometers *bald eagle screech*
+
+```{r, car_sales2, fig.cap="Some plots", echo=FALSE}
+ggplot(car_train, aes(x = mileage)) +
+  geom_histogram(binwidth = 10000) +
+  labs(x = "Mileage (Km)", y = "Count") +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Barchart Distribution of Car Fuel Type
+>- Most cars are Petrol fuel, but slightly more diversity amount automatic cars (more diesel and hybrid)
+
+```{r, car_sales3, fig.cap="Some plots", echo=FALSE}
+# stacked bar chart
+ggplot(car_train, aes(x = fuel, fill = fuel)) +
+  geom_bar() +
+  labs(x = "Fuel Type", y = "Count") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Barchart of Assembly Type by Count
+>- For automatic cars, decently even mix between imported and local car assembly
+>- For manual cars, significantly more locally assembled than imported
+
+```{r, car_sales4, fig.cap="Some plots", echo=FALSE}
+# stacked bar chart
+ggplot(car_sales, aes(x = assembly, fill = assembly)) +
+  geom_bar() +
+  labs(x = "Assembly", y = "Count", title = "Distribution of Car Assembly") +
+  facet_wrap(~ transmission) +
+  theme_minimal()
+```
+
+---
+class: inverse, center, middle
+
+# Boxplot of Log Dollars by Car Body
+>- Super wide IQR for Pick-Ups & skewed heavily right
+>- Compact sedans have very narrow range with many outliers
+
+```{r, car_sales5, fig.cap="Some plots", echo=FALSE}
+# rotate x axis labels
+ggplot(car_sales,aes(x=body,y=log10(usd),fill=body))+
+  geom_boxplot()+
+  coord_flip()+
+  theme(legend.position = "none")
+```
+
+---
+class: inverse, center, middle
+
+# Barchart of Average Price by Car Make
+>- Large drop off between 4th and 5th (Porsche and Audi)
+>- Daewoo bad
+
+```{r, car_sales6, fig.cap="Some plots", echo=FALSE}
+ggplot(car_sales  %>%  group_by(make)  %>%  summarise(count=n(),average_usd=mean(usd))  %>%  filter(count>10) %>%  mutate(make=fct_reorder(make,average_usd)),aes(x=make,y=average_usd,fill=make))+
+  geom_bar(stat='identity')+
+  coord_flip()+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels=scales::dollar)
+```
+
+---
+class: inverse, center, middle
+
+# DBSCAN of Average Price
+>- Most of data between 1 and -1 and share similar density so clustered
+>- 4 values above 2 dollars in own cluster
+
+```{r, car_sales8, fig.cap="Some plots", echo=FALSE}
+set.seed(123)
+dbscan <- car_sales  %>%  group_by(make)  %>%  summarise(count=n(),average_usd=mean(usd))  %>%  filter(count>10) %>%  mutate(make=fct_reorder(make,average_usd))
+dbscan$count <- scale(dbscan$count)
+dbscan$average_usd <- scale(dbscan$average_usd)
+
+eps <- 0.3  # The maximum distance between two samples for one to be considered in the neighborhood of the other
+minPts <- 5  # The number of samples in a neighborhood for a point to be considered as a core point
+dbscan_result <- dbscan(dbscan$average_usd, eps = eps, MinPts = minPts)
+
+plot(dbscan$average_usd, col = dbscan_result$cluster + 1, pch = 16, main = "DBSCAN Clustering")
+legend("topright", legend = unique(dbscan_result$cluster), col = unique(dbscan_result$cluster) + 1, pch = 16)
+```
+
+---
+class: inverse, center, middle
+
+# Boxplot of Log Dollars by Color of Car
+
+```{r, car_sales7, fig.cap="Some plots", echo=FALSE}
+ggplot(car_sales, aes(x=as.factor(fuzzy_colors),y=log(usd)))+
+  geom_boxplot()+coord_flip()+theme(legend.position = "none")+labs(x="Color",y="Price (USD)")
+```
+
+---
+class: inverse, center, middle
+
+# Workflow
+.pull-left[
+```{r code, paged.print=FALSE, eval=FALSE}
+car_sales <- car_sales %>% 
+  mutate(
+    year = as.integer(year),
+    mileage = as.integer(mileage),
+    price = as.integer(price)
+  )
+
+car_recipe <- recipe(price ~ year + mileage, data = car_sales) %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+
+car_workflow <- workflow()  %>%  
+  add_recipe(car_recipe)  %>%  
+  add_model(linear_reg())
+
+reg_metrics <- metric_set(rmse,mae, rsq)
+
+car_results <- car_workflow  %>% 
+  fit_resamples(resamples = car_folds,control = control_resamples(save_pred = T),metrics = reg_metrics)
+collect_metrics(car_results)
+```
+]
+
+--
+.pull-right[
+```{r, workflow_results, echo=FALSE}
+cal_plot_regression(car_results, alpha = 1 / 5)
+#talk about leverage!
+```
+]
+---
+class: inverse, center, middle
+
+# Tree Model
+
+.pull-left[
+```{r, tree_model, echo=FALSE}
+lgbm_spec <- 
+  boost_tree(trees = tune(), learn_rate = tune(), min_n = tune()) %>% 
+  set_mode("regression") %>% 
+  set_engine("lightgbm")
+
+lgbm_wflow <- workflow(car_recipe, lgbm_spec)
+
+set.seed(12)
+grid <- 
+  lgbm_wflow %>% 
+  extract_parameter_set_dials() %>% 
+  grid_latin_hypercube(size = 25)
+
+ctrl <- control_grid(save_pred = TRUE,verbose=TRUE)
+
+lgbm_res <-
+  lgbm_wflow %>%
+  tune_grid(
+    resamples = car_folds,
+    control = ctrl,
+    metrics = reg_metrics,
+    grid=grid
+  )
+
+collect_metrics(lgbm_res)
+show_best(lgbm_res, metric = "rmse")
+lgbm_best <- select_best(lgbm_res, metric = "rmse")
+```
+]
+--
+
+.pull-right[
+```{r, tree_model, echo=FALSE}
+
+lgbm_res %>%
+  collect_predictions(
+    parameters = lgbm_best
+  ) %>%
+  cal_plot_regression(
+    truth = price,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+```
+]
+  
+---
+class: inverse, center, middle
+
+# Racing
+
+.pull-left[
+
+# Method for comparing multiple models
+>- workflow model versus tree model
+```{r, tree_model, echo=FALSE}
+lgbm_race_res <-
+  lgbm_wflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 50, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+show_best(lgbm_race_res,metric='rmse')
+```
+]
+
+.pull-right[
+```{r, racing, echo=FALSE}
+plot_race(lgbm_race_res) + 
+  scale_x_continuous(breaks = pretty_breaks())
+```
+]
+
+---
+class: inverse, center, middle
+
+# Racing Honed
+>- Pretty poor fit with high RMSE (4469257) and low R^2 (12.5%)
+
+.pull-left[
+```{r, racing_deeper, echo=FALSE}
+lgbm_race_res %>%
+  collect_predictions(
+    parameters = select_best(lgbm_race_res,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = price,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+best_param <- select_best(lgbm_race_res,metric='rmse')
+
+final_wflow <-
+  lgbm_wflow %>%
+  finalize_workflow(best_param)
+
+set.seed(123)
+final_res <-
+  final_wflow %>%
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+```
+]
+
+.pull-right[
+```{r, racing_deeper, echo=FALSE}
+final_res %>%
+  collect_predictions() %>%
+  cal_plot_regression(
+    truth = price,
+    estimate = .pred,
+    alpha = 1 / 4)
+final_res  %>%  collect_metrics()
+```
+]
+
+---
+class: inverse, center, middle
+
+# Can XGBoost do better?
+```{r, xgboost_set, echo=FALSE}
+xgb_spec <- boost_tree( #model spec basically showing what we wanna do    
+    trees = tune(),
+    min_n = tune(),
+    mtry = tune(),
+    learn_rate = tune(),
+    sample_size = tune(),
+    tree_depth = tune(),
+    loss_reduction = tune()) %>% 
+  set_engine("xgboost") %>% #see ?set_engine for a full list of possibilites
+  set_mode("regression")
+
+xgb_wf <- workflow() %>%  #add the preproc with the model spec
+  add_recipe(car_recipe) %>% 
+  add_model(xgb_spec)
+
+xgb_grid <- grid_latin_hypercube( 
+  #cover all bases in the ~7 dimensional space of possible hyper params
+  trees(range = c(300,2400)),
+  tree_depth(range = c(4,20)),
+  min_n(range = c(1,10)),
+  loss_reduction(),
+  sample_size = sample_prop(range = c(.4,.9)),
+  mtry(range = c(4,12)),
+  learn_rate(range = c(-4,-1)),
+  size = 10
+  )
+
+xgb_rs <- tune_race_anova(
+  object = xgb_wf,
+  resamples = car_folds,
+  metrics = metric_set(rmse),
+  grid = xgb_grid, #number of each different hyperparams to test out
+  control = control_race(verbose_elim = TRUE)
+)
+
+plot_race(xgb_rs) + 
+  scale_x_continuous(breaks = pretty_breaks())
+show_best(xgb_rs,metric='rmse')
+```
+
+.pull-left[
+>- Model specifications indicating what we're trying to accomplish
+>- Add preproc with the model specifications
+>- Ensure we cover all bases in the ~7 dimensional space of possible hyper parameters
+]
+
+--
+
+.pull-right[
+>- Plot
+```{r, xgboost, echo=FALSE}
+plot_race(xgb_rs) + 
+  scale_x_continuous(breaks = pretty_breaks())
+```
+]
+
+---
+
+# Workflow Sets
+
+```{r, workflows_final, echo=FALSE}
+car_train <- car_train %>% 
+  mutate(
+    year = as.integer(year),
+    mileage = as.integer(mileage),
+    price = as.integer(price)
+  )
+base_recipe <- 
+   recipe(price ~ year + mileage, data = car_train) %>%  
+  step_rm(addref,color,mileage) %>%  
+  step_lencode_mixed(all_nominal_predictors(), outcome = vars(price)) %>%  
+  step_normalize(all_predictors()) 
+
+filter_rec <- 
+   base_recipe %>% 
+   step_corr(all_numeric_predictors(), threshold = tune())
+
+pca_rec <- base_recipe %>% 
+   step_pca(all_numeric_predictors(), num_comp = tune()) %>% 
+  step_normalize(all_predictors())
+```
+
+---
+
+# Best of Each Model
+
+```{r, best, echo=FALSE}
+library(rules)
+library(baguette)
+
+regularized_spec <- 
+   linear_reg(penalty = tune(), mixture = tune()) %>% 
+   set_engine("glmnet")
+
+cart_spec <- 
+   decision_tree(cost_complexity = tune(), min_n = tune()) %>% 
+   set_engine("rpart") %>% 
+   set_mode("regression")
+
+nnet_spec <- 
+   mlp(hidden_units = tune(), penalty = tune(), epochs = tune()) %>% 
+   set_engine("nnet", MaxNWts = 2600) %>% 
+   set_mode("regression")
+
+rf_spec <- 
+   rand_forest(mtry = tune(), min_n = tune(), trees = 1000) %>% 
+   set_engine("ranger") %>% 
+   set_mode("regression")
+
+xgb_spec <- 
+   boost_tree(tree_depth = tune(), learn_rate = tune(), loss_reduction = tune(), 
+              min_n = tune(), sample_size = tune(), trees = tune()) %>% 
+   set_engine("xgboost") %>% 
+   set_mode("regression")
+```
+
+---
+
+# Workflow Set
+
+```{r, best, echo=FALSE}
+wf_set <- 
+   workflow_set(
+      preproc = list(car_recipe),
+      models = list(glmnet = regularized_spec, cart = cart_spec, 
+                    RF = rf_spec, xgboost = xgb_spec),
+      cross = TRUE
+   )
+
+wf_set <- 
+   wf_set %>% 
+   anti_join(tibble(wflow_id = c("pca_glmnet", "filter_glmnet")), 
+             by = "wflow_id")
+
+```
+             
+--
+
+# Workflow Fit
+
+```{r, best, echo=FALSE}
+grid_ctrl <- control_grid(save_pred = TRUE, save_workflow = TRUE)
+
+wf_set_res <- 
+   wf_set %>% 
+   workflow_map("tune_grid", resamples = car_folds, grid = 5, 
+                metrics = reg_metrics, control = grid_ctrl,verbose = TRUE,seed=123) 
+autoplot(wf_set_res, metric = "rmse")
+
+library(stacks)
+
+wf_set_stack <- 
+  stacks() %>% 
+  add_candidates(wf_set_res)
+
+set.seed(122)
+wf_set_stack_res <- blend_predictions(wf_set_stack)
+autoplot(wf_set_stack_res)
+autoplot(wf_set_stack_res, type = "weights")
+wf_set_stack_res <- fit_members(wf_set_stack_res)
+
+autoplot(wf_set_stack_res,type="performance")
+
+predict(wf_set_stack_res, car_test) %>% 
+  bind_cols(car_test) %>% 
+  cal_plot_regression(truth = price, estimate = .pred, alpha = 1 / 4)
+```
+  
+--
+
+# Race Results
+
+```{r, best, echo=FALSE}
+race_results <-
+   wf_set_stack_res %>%
+   workflow_map(
+      "tune_race_anova",
+      seed = 1503,
+      resamples = car_folds,
+      grid = 25,
+      control = grid_ctrl
+   )
+```
+
+---
+
