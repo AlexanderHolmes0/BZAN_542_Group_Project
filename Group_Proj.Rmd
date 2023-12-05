@@ -15,10 +15,10 @@ library(probably)
 library(bonsai)
 library(textrecipes)
 library(finetune)
-library(agua)
 library(plotly)
 theme_set(theme_bw())
 #load("Stacked_Models.RData")
+load('Trained_Models.RData')
 ```
 
 ```{r pkgs}
@@ -136,14 +136,15 @@ ggplot(car_train, aes(x = miles, y = usd)) +
 ```{r recipe}
 car_recipe <- recipe(usd ~ .,data=car_train) |> 
   step_rm(addref,color,price) |> 
-  step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,-assembly ,outcome = vars(usd)) |> 
+  step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,
+                     -assembly ,outcome = vars(usd)) |> 
   step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
   step_other(all_nominal_predictors(),threshold = .3) |> 
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |> 
   step_corr(all_numeric_predictors(), threshold = 0.9)
-
 juice(prep(car_recipe))
+bake(prep(car_recipe),new_data=car_test)
 ```
 
 
@@ -163,13 +164,13 @@ car_results <- car_workflow |>
                 grid = 25,
                 control = control_resamples(save_pred = T),
                 metrics = reg_metrics)
+
 collect_metrics(car_results)
 glmnet_best <- car_results %>% select_by_one_std_err(mixture, metric = "rmse")
 
 ```
 
 ```{r workflow_results}
-cal_plot_regression(car_results, alpha = 1 / 5)
 car_results %>%
   collect_predictions(
     parameters = glmnet_best
@@ -195,7 +196,7 @@ set.seed(12)
 grid <- 
   lgbm_wflow %>% 
   extract_parameter_set_dials() %>% 
-  grid_latin_hypercube(size = 25)
+  grid_latin_hypercube(size = 20)
 
 #visualize the grid in 3d space with plotly and tooltip
 plot_ly(grid, x = ~trees, y = ~log10(learn_rate), z = ~min_n) %>%
@@ -330,7 +331,7 @@ xgb_rs <- tune_race_anova(
   resamples = car_folds,
   metrics = metric_set(rmse),
   grid = xgb_grid, #number of each different hyperparams to test out
-  control = control_race(verbose_elim = TRUE)
+  control = control_race(save_pred = TRUE,verbose=TRUE)
 )
 
 plot_race(xgb_rs) + 
@@ -340,32 +341,32 @@ show_best(xgb_rs,metric='rmse')
 
 
 
+# DALEXtra
+```{r}
+library(DALEXtra)
+final_model <- extract_workflow(final_res)
 
-# H20 AutoML
+model_explainer <- explain_tidymodels(final_model, data = select(car_train,-usd), y = car_train$usd)
+model_parts <- model_parts(model_explainer)
+plot(model_parts,max_vars= 10)
 
-```{r,warning=FALSE}
-h2o_start()
+resids_gbm <- model_performance(model_explainer)
+plot(resids_gbm)
+model_profile <- model_profile(model_explainer, type = "accumulated")
+plot(model_profile, variables = "mileage")
+example_car <- car_train[sample(1:nrow(car_train),1), ]
 
-# Demonstrate fitting parsnip models: 
-# Specify the type of model and the h2o engine 
-# not run 
-auto_spec_refit <-
-  auto_ml() %>%
-  set_engine("h2o", 
-             max_runtime_secs = 60, 
-             save_data = TRUE,
-             keep_cross_validation_predictions = TRUE) %>%
-  set_mode("regression")
+prediction_breakdown <- predict_parts(
+  explainer = model_explainer,
+  new_observation = example_car,
+  type = "break_down"
+)
 
-auto_wflow_refit <-
-  workflow() %>%
-  add_model(auto_spec_refit) %>%
-  add_recipe(car_recipe)
-
-first_auto <- fit(auto_wflow_refit, data = car_train)
-# fit another 60 seconds 
-second_auto <- refit(first_auto, max_runtime_secs = 60)
+example_car
+plot(prediction_breakdown)
 ```
+
+
 
 
 
