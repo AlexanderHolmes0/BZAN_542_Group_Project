@@ -4,19 +4,25 @@
 Welcome to the comprehensive analysis of used car data using various machine learning techniques and workflows in R. This repository dives deep into the world of predictive modeling and data exploration, showcasing the power of packages such as `tidymodels`, `embed`, `stringdist`, `probably`, `bonsai`, `textrecipes`, and `finetune`. The analysis covers everything from initial data loading to model evaluation and comparison.
 
 ## Table of Contents
-1. [Installation](#installation)
-2. [Parallel Processing](#parallel-processing)
-3. [Data Preparation and Exploration](#data-preparation-and-exploration)
-4. [Data Preprocessing](#data-preprocessing)
-5. [Linear Regression Model](#linear-regression-model)
-6. [LightGBM Model](#lightgbm-model)
-7. [LightGBM Racing](#lightgbm-racing)
-8. [Final Model and Evaluation](#final-model-and-evaluation)
-9. [XGBoost Model (Optional)](#xgboost-model-optional)
-10. [Workflow Sets](#workflow-sets)
-11. [Ensemble Model Evaluation](#ensemble-model-evaluation)
-12. [Workflow Set Racing](#workflow-set-racing)
-13. [GitHub Repository Structure](#github-repository-structure)
+1. [Final Presentation](#Final-Presentation)
+2. [Installation](#installation)
+3. [Parallel Processing](#parallel-processing)
+4. [Data Preparation and Exploration](#data-preparation-and-exploration)
+5. [Data Preprocessing](#data-preprocessing)
+6. [Linear Regression Model](#linear-regression-model)
+7. [LightGBM Model](#lightgbm-model)
+8. [LightGBM Racing](#lightgbm-racing)
+9. [Final Model and Evaluation](#final-model-and-evaluation)
+10. [XGBoost Model (Optional)](#xgboost-model-optional)
+11. [Workflow Sets](#workflow-sets)
+12. [Ensemble Model Evaluation](#ensemble-model-evaluation)
+13. [Workflow Set Racing](#workflow-set-racing)
+14. [GitHub Repository Structure](#github-repository-structure)
+
+
+## Final-Presentation
+https://tiny.utk.edu/542Slides
+
 
 ## Installation
 To replicate the analysis, ensure you have the required packages installed. Run the following code to install the necessary packages once:
