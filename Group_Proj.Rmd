@@ -17,7 +17,7 @@ library(textrecipes)
 library(finetune)
 library(plotly)
 theme_set(theme_bw())
-#load("Stacked_Models.RData")
+load("Stacked_Models.RData")
 load('Trained_Models.RData')
 ```
 
@@ -37,21 +37,24 @@ cl <- parallel::makePSOCKcluster(cores)
 doParallel::registerDoParallel(cl)
 ```
 
-
-
 ```{r split}
 set.seed(123)
 car_sales <- read.csv('pakwheels_used_car_data_v02.csv',stringsAsFactors = FALSE,na.strings = c("NA",""))
 car_sales <- car_sales |> 
   mutate(luxury = factor(ifelse(make %in%
-  c("Land", "Porsche","Bentley","Jaguar","Mercedes","Range","Tesla")
+  c("Land", "Porsche","Bentley","Jaguar","Mercedes","Range","Tesla",'Audi','Austin','BMW',"Lexus")
   , 1, 0)),
+  engine=as.factor(engine),
+  registered=ifelse(registered=="Un-Registered",0,1),
   usd = price*0.003541,
-  miles = mileage*0.621371,
-  
-  assembly=replace_na(assembly,"Local"))
-car_sales <- car_sales |> 
-  filter(addref!=7770572)
+  #miles = mileage*0.621371,
+  assembly=replace_na(assembly,"Local")) |> 
+  filter(addref!=7770572 & luxury == 0) |> 
+  select(-city,-addref) |> 
+  filter(!(make =='Ford' & body == "Double Cabin"))
+
+car_sales |> 
+  filter(make=='Ford')
 
 car_sales <- car_sales[complete.cases(car_sales),]
 
@@ -60,8 +63,7 @@ kbb_colors_df <- data.frame(
 )
 
 car_sales <- car_sales |> 
-  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color,method = 'jaccard',maxDist = 11),]) |> 
-  mutate(across(where(is.character),as.factor))
+  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color,method = 'jaccard',maxDist = 11),])
 
 
 car_split <- initial_split(car_sales,strata = price)
@@ -135,18 +137,21 @@ ggplot(car_train, aes(x = miles, y = usd)) +
 
 ```{r recipe}
 car_recipe <- recipe(usd ~ .,data=car_train) |> 
-  step_rm(addref,color,price) |> 
+  step_rm(price,luxury) |> 
   step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,
-                     -assembly ,outcome = vars(usd)) |> 
+                     -assembly,outcome = vars(usd)) |> 
   step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
   step_other(all_nominal_predictors(),threshold = .3) |> 
   step_zv(all_predictors()) |>
   step_normalize(all_numeric_predictors()) |> 
   step_corr(all_numeric_predictors(), threshold = 0.9)
-juice(prep(car_recipe))
-bake(prep(car_recipe),new_data=car_test)
-```
 
+juice(prep(car_recipe))
+
+bake(prep(car_recipe),new_data=car_test)
+ggplot(juice(prep(car_recipe)) |> select(usd),aes(x=usd))+
+  geom_histogram()
+```
 
 ```{r workflow}
 glmnet_spec <- linear_reg(penalty = tune(),
@@ -182,6 +187,36 @@ car_results %>%
   )
 #talk about leverage!
 ```
+
+```{r}
+
+final_linear <- 
+  car_workflow %>%
+  finalize_workflow(glmnet_best)
+
+final_linear_res <- 
+  final_linear %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_linear_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_linear_res |> collect_metrics()
+linear_pred <- final_linear_res |> collect_predictions()
+linear_pred |> 
+  mutate(resid=usd-.pred) |> 
+  arrange(desc(abs(resid)))
+
+```
+
+# Light GBM
 
 ```{r}
 
@@ -223,9 +258,7 @@ lgbm_best <- select_best(lgbm_res, metric = "rmse")
 select_by_one_std_err(lgbm_res, metric = "rmse",desc(trees))
 #select_best(lgbm_res, metric = "rmse")
 
-
 ```
-
 
 ```{r}
 lgbm_res %>%
@@ -237,7 +270,7 @@ lgbm_res %>%
     estimate = .pred,
     alpha = 1 / 3
   )
-autoplot(lgbm_res,metric = "rmse")
+autoplot(lgbm_res,metric = "rmse")+geom_smooth()
 ```
 
 ```{r Racing}
@@ -250,6 +283,7 @@ lgbm_race_res <-
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
+
 show_best(lgbm_race_res,metric='rmse')
 
 plot_race(lgbm_race_res) + 
@@ -295,7 +329,6 @@ final_res %>%
 final_res |> collect_metrics()
 ```
 
-
 #lets see if XGBoost can do anybetter/?
 
 ```{r}
@@ -316,7 +349,7 @@ xgb_wf <- workflow() %>%  #add the preproc with the model spec
 
 xgb_grid <- grid_latin_hypercube( 
   #cover all bases in the ~7 dimensional space of possible hyper params
-  trees(range = c(300,2400)),
+  trees(range = c(300,1000)),
   tree_depth(range = c(4,20)),
   min_n(range = c(1,10)),
   loss_reduction(),
@@ -329,20 +362,232 @@ xgb_grid <- grid_latin_hypercube(
 xgb_rs <- tune_race_anova(
   object = xgb_wf,
   resamples = car_folds,
-  metrics = metric_set(rmse),
+  metrics = reg_metrics,
   grid = xgb_grid, #number of each different hyperparams to test out
   control = control_race(save_pred = TRUE,verbose=TRUE)
 )
 
 plot_race(xgb_rs) + 
   scale_x_continuous(breaks = pretty_breaks())
+
 show_best(xgb_rs,metric='rmse')
+
+
+best_xgb <- select_by_one_std_err(xgb_rs, metric = "rmse",desc(trees))
+
+final_xgb_wflow <- 
+  xgb_wf %>%
+  finalize_workflow(best_xgb)
+
+set.seed(123)
+final_res_xgb <- 
+  final_xgb_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_res_xgb %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_res_xgb |> collect_metrics()
+```
+
+# Knn 
+```{r}
+KNNSpec <- nearest_neighbor(
+  neighbors = tune(),
+  weight_func = tune(),
+  dist_power = tune()
+) %>%  
+  set_engine("kknn") %>% 
+  set_mode("regression")
+
+KNN_workflow <- workflows::workflow() %>%
+  workflows::add_recipe(car_recipe) %>%
+  workflows::add_model(KNNSpec)
+
+KNN_Work_Spec <-
+  KNN_workflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 5, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+show_best(KNN_Work_Spec,metric='rmse')
+select_by_one_std_err(KNN_Work_Spec, metric = "rmse",desc(neighbors))
+
+plot_race(KNN_Work_Spec) + 
+  scale_x_continuous(breaks = pretty_breaks())
+
+autoplot(KNN_Work_Spec,metric = "rmse")+geom_smooth()
+
+KNN_Work_Spec %>%
+  collect_predictions(
+    parameters = select_best(KNN_Work_Spec,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+finalKNN_wflow <- 
+  KNN_workflow %>%
+  finalize_workflow(select_by_one_std_err(KNN_Work_Spec, metric = "rmse",desc(neighbors)))
+
+set.seed(123)
+final_KNN_res <- 
+  finalKNN_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_KNN_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_KNN_res |> collect_metrics()
+```
+
+# DECISION TREE #Cart
+```{r}
+DT_Spec <- decision_tree(tree_depth = tune(), 
+                          min_n = tune(), 
+                          cost_complexity = tune()) %>% 
+  set_engine("rpart") %>% 
+  set_mode("regression")
+
+DT_workflow <- workflows::workflow() %>%
+  workflows::add_recipe(car_recipe) %>%
+  workflows::add_model(DT_Spec)
+
+DT_Train <-
+  DT_workflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 5, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+
+show_best(DT_Train,metric='rmse')
+select_by_one_std_err(DT_Train, metric = "rmse",desc(tree_depth))
+
+plot_race(DT_Train) + 
+  scale_x_continuous(breaks = pretty_breaks())
+
+autoplot(DT_Train,metric = "rmse")+geom_smooth()
+
+DT_Train %>%
+  collect_predictions(
+    parameters = select_best(DT_Train,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+finalDT_wflow <- 
+  KNN_workflow %>%
+  finalize_workflow(select_by_one_std_err(KNN_Work_Spec, metric = "rmse",desc(neighbors)))
+
+set.seed(123)
+final_KNN_res <- 
+  finalKNN_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
+
+final_KNN_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
+
+final_KNN_res |> collect_metrics()
+```
+
+# Brulee NNET
+
+```{r}
+# Use mlp() for multi-layer perceptron
+nn_spec <- mlp(
+  hidden_units = c(5,5),
+  penalty = tune(),
+  dropout = tune(),
+  epochs = 50L,
+  learn_rate = tune(),
+  activation = 'relu'
+) %>%  
+  set_engine("brulee") %>% 
+  set_mode("regression")
+
+NNET_workflow <- workflows::workflow() %>%
+  workflows::add_recipe(car_recipe) %>%
+  workflows::add_model(nn_spec)
+
+set.seed(123)
+NET_Race_res <-
+  NNET_workflow %>%
+  tune_race_anova(
+    resamples = car_folds,
+    grid = 5, 
+    metrics = reg_metrics,
+    control=control_race(save_pred = TRUE,verbose=TRUE)
+  )
+
+show_best(NET_Race_res,metric='rmse')
+
+plot_race(NET_Race_res) + 
+  scale_x_continuous(breaks = pretty_breaks())
+
+NET_Race_res %>%
+  collect_predictions(
+    parameters = select_best(NET_Race_res,metric='rmse')
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  )
+
+
+set.seed(2)
+cls_fit <- brulee_mlp(
+  usd ~ ., data = juice(prep(car_recipe)), 
+  ## two layers with 5 hidden units each:
+  hidden_units = c(5, 5),
+  epochs = 50L, learn_rate = 0.1, batch_size = 2^8
+)
+
+
+predict(cls_fit, bake(prep(car_recipe),new_data=car_test)) %>%
+  bind_cols(car_test$usd) %>%
+  ggplot(aes(log(.pred), log(...2))) +
+  geom_point()
 ```
 
 
 
+
+
 # DALEXtra
+
 ```{r}
+load("ModelsWithExplainer.RData")
 library(DALEXtra)
 final_model <- extract_workflow(final_res)
 
@@ -366,9 +611,26 @@ example_car
 plot(prediction_breakdown)
 ```
 
+# Model Diagnostics
 
+```{r}
+final_res %>% 
+  collect_predictions() %>% 
+  ggplot(aes(x = 1/sqrt(usd) , y = usd-.pred)) +
+  geom_point(alpha = 1 / 4) +
+  geom_smooth()+
+  labs(x = "Predicted", y = "Observed")
 
-
+ggplot(q1, aes(sample = model$resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  theme_bw() +
+  labs(
+    x = "Theoretical Quantiles",
+    y = "Sample Quantiles",
+    title = "Figure 3. Normal Q-Q Plot"
+  )
+```
 
 # Workflow Sets
 
@@ -418,7 +680,6 @@ xgb_spec <-
    set_mode("regression")
 ```
 
-
 ```{r}
 wf_set <- 
    workflow_set(
@@ -433,8 +694,6 @@ wf_set <-
    anti_join(tibble(wflow_id = c("pca_glmnet", "filter_glmnet")), 
              by = "wflow_id")
 ```
-
-
 
 ```{r fit the set}
 grid_ctrl <- control_grid(save_pred = TRUE, save_workflow = TRUE)
@@ -482,4 +741,3 @@ race_results <-
       control = grid_ctrl
    )
 ```
-
