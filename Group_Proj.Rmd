@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = T)
 library(tidymodels)
 library(tidyverse)
 library(embed)
@@ -17,8 +18,9 @@ library(textrecipes)
 library(finetune)
 library(plotly)
 theme_set(theme_bw())
-load("Stacked_Models.RData")
-load('Trained_Models.RData')
+#load("Stacked_Models.RData")
+#load('Trained_Models.RData')
+load('Filtered_Out_Luxury_Models.RData')
 ```
 
 ```{r pkgs}
@@ -127,7 +129,7 @@ ggplot(car_train, aes(x = mileage, y = log(usd))) +
   labs(x = "Mileage (KM)", y = "Log (USD)", title = "Price vs Year") +
   theme_minimal()
 #scatterplot
-ggplot(car_train, aes(x = miles, y = usd)) +
+ggplot(car_train, aes(x = log(mileage), y = log(usd))) +
   geom_point() +
   geom_smooth()+
   labs(x = "Miles", y = "Price (USD)", title = "Price vs Year") +
@@ -171,8 +173,14 @@ car_results <- car_workflow |>
                 metrics = reg_metrics)
 
 collect_metrics(car_results)
-glmnet_best <- car_results %>% select_by_one_std_err(mixture, metric = "rmse")
 
+kableExtra::kbl(show_best(car_results,metric='rmse',n=1) |> 
+bind_rows(show_best(car_results,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "GLMNET Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+
+glmnet_best <- car_results %>% select_by_one_std_err(mixture, metric = "rmse")
+collect_metrics(glmnet_best)
 ```
 
 ```{r workflow_results}
@@ -184,7 +192,8 @@ car_results %>%
     truth = usd,
     estimate = .pred,
     alpha = 1 / 3
-  )
+  ) +
+  labs(title = "GLMNET Model Predictions")
 #talk about leverage!
 ```
 
@@ -208,7 +217,7 @@ final_linear_res %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_linear_res |> collect_metrics()
+final_linear_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq'))
 linear_pred <- final_linear_res |> collect_predictions()
 linear_pred |> 
   mutate(resid=usd-.pred) |> 
@@ -461,6 +470,7 @@ final_KNN_res |> collect_metrics()
 
 # DECISION TREE #Cart
 ```{r}
+
 DT_Spec <- decision_tree(tree_depth = tune(), 
                           min_n = tune(), 
                           cost_complexity = tune()) %>% 
@@ -475,7 +485,7 @@ DT_Train <-
   DT_workflow %>%
   tune_race_anova(
     resamples = car_folds,
-    grid = 5, 
+    grid = 25, 
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
@@ -499,25 +509,25 @@ DT_Train %>%
   )
 
 finalDT_wflow <- 
-  KNN_workflow %>%
-  finalize_workflow(select_by_one_std_err(KNN_Work_Spec, metric = "rmse",desc(neighbors)))
+  DT_workflow %>%
+  finalize_workflow(select_by_one_std_err(DT_Train, metric = "rmse",desc(tree_depth)))
 
 set.seed(123)
-final_KNN_res <- 
-  finalKNN_wflow %>% 
+final_DT_res <- 
+  finalDT_wflow %>% 
   last_fit(
     split = car_split,
     metrics = reg_metrics
   )
 
-final_KNN_res %>% 
+final_DT_res %>% 
   collect_predictions() %>% 
   cal_plot_regression(
     truth = usd, 
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_KNN_res |> collect_metrics()
+final_DT_res |> collect_metrics()
 ```
 
 # Brulee NNET
@@ -525,10 +535,9 @@ final_KNN_res |> collect_metrics()
 ```{r}
 # Use mlp() for multi-layer perceptron
 nn_spec <- mlp(
-  hidden_units = c(5,5),
+  hidden_units = tune(),
   penalty = tune(),
-  dropout = tune(),
-  epochs = 50L,
+  epochs = tune(),
   learn_rate = tune(),
   activation = 'relu'
 ) %>%  
@@ -544,7 +553,7 @@ NET_Race_res <-
   NNET_workflow %>%
   tune_race_anova(
     resamples = car_folds,
-    grid = 5, 
+    grid = 20, 
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
@@ -564,20 +573,26 @@ NET_Race_res %>%
     alpha = 1 / 3
   )
 
+finalNNET_wflow <- 
+  NNET_workflow %>%
+  finalize_workflow(select_by_one_std_err(NET_Race_res, metric = "rmse",desc(hidden_units)))
 
-set.seed(2)
-cls_fit <- brulee_mlp(
-  usd ~ ., data = juice(prep(car_recipe)), 
-  ## two layers with 5 hidden units each:
-  hidden_units = c(5, 5),
-  epochs = 50L, learn_rate = 0.1, batch_size = 2^8
-)
+set.seed(123)
+NET_Final_res <- 
+  finalNNET_wflow %>% 
+  last_fit(
+    split = car_split,
+    metrics = reg_metrics
+  )
 
+NET_Final_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4)
 
-predict(cls_fit, bake(prep(car_recipe),new_data=car_test)) %>%
-  bind_cols(car_test$usd) %>%
-  ggplot(aes(log(.pred), log(...2))) +
-  geom_point()
+NET_Final_res |> collect_metrics()
 ```
 
 
