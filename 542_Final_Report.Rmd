@@ -1,0 +1,427 @@
+---
+title: "Pakistani Car Sales: A Machine Learning Approach"
+author:
+  - Alexander Holmes
+  - Aria Sajjad
+  - Lucas McPherron
+  - Tyler Dykes
+  - Brennan Riddle
+  - Brooks Heath
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  bookdown::pdf_document2:
+    keep_tex: true
+abstract: "This research paper investigates the application of machine learning models to predict used car prices in the dynamic context of the Pakistani market, with a primary focus on everyday vehicles. The data preprocessing phase involved comprehensive steps to enhance the dataset's quality, addressing issues such as collinearity, categorical encoding, and feature normalization. The modeling section employed a diverse set of algorithms, including GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, each contributing unique strengths to the predictive framework. The models were tuned using grid search methodology, and for gradient boosted models (LightGBM and XGBoost), racing with ANOVA tables added an extra layer of refinement. The results section provides an in-depth analysis of each model's performance, offering insights into their strengths and limitations in predicting used car prices in the Pakistani market. This study contributes valuable knowledge to the intersection of machine learning and automotive commerce, offering a nuanced understanding of factors influencing pricing dynamics in the diverse landscape of Pakistani used car sales."
+geometry: margin=1in
+toc: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+library(tidymodels)
+library(tidyverse)
+library(embed)
+library(stringdist)
+library(probably)
+library(bonsai)
+library(textrecipes)
+library(finetune)
+library(plotly)
+theme_set(theme_bw())
+knitr::opts_chunk$set(fig.height = 4,fig.width = 10)
+```
+
+```{r, cache=TRUE}
+load('Filtered_Out_Luxury_Models.RData')
+```
+
+
+# Introduction
+
+$\hspace{20pt}$This paper presents an application of machine learning for the prediction of used car prices in Pakistan's used car market, with a specific focus on the more commonplace vehicles that are the majority of transactions. While existing valuation methods frequently fall short, especially for everyday vehicles, our primary goal is to untangle the complexities surrounding price determinations. We want to demystify the valuation process by providing a dependable framework that clarifies the process for both buyers and sellers, resulting in a more transparent and trustworthy marketplace. We aim to address the unique challenges posed by the diverse array of vehicles in the Pakistani used car market by employing sophisticated machine learning algorithms and offering an innovative pricing approach that caters to the dynamics of Pakistani car sales.
+
+$\hspace{20pt}$This study recognizes the imbalances in car pricing between buyers and sellers, especially when it comes to non-luxury vehicle appraisal. Our study attempts to deliver accurate and useful insights to help dealers and consumers navigate the intricate web of factors that affect car prices, such as make, model, mileage, and condition. We contribute to a conversation about leveraging machine learning to enhance transparency in the used car market by exploring the complexities of car pricing specifically for common place used car. This paper not only demonstrates the potential of machine learning to reduce valuation disparities, but it also envisions a future in Pakistan with a more informed and equitable pre-owned car market, benefiting all parties involved in the complex dance of buying and selling everyday automobiles.
+
+\newpage
+
+# Methods
+
+## Data
+
+$\hspace{20pt}$The data used in this study was obtained from the Kaggle dataset 'Pakistan Used Car Prices 2023' (https://www.kaggle.com/datasets/talhabarkaatahmad/pakistan-used-car-prices-2023). The dataset contains 77,878 records and 16 columns, including variables like: make, model, assembly, registered, year, mileage, and engine. The dataset was collected from the website PakWheels.com, a popular online marketplace for buying and selling cars in Pakistan. The data was scraped from the website using the Python library BeautifulSoup. The dataset was then cleaned and filtered to remove outliers and irrelevant data. The final dataset was then exported as a CSV file and uploaded to Kaggle for public use. The dataset contains a wide range of vehicles, including both luxury and non-luxury cars. Luxury cars were identified by the make and model variables, which were then filtered out to focus solely on everyday makes and models. The dataset contains a mix of categorical and numeric variables, with the price variable being the most important response variable.
+
+$\hspace{20pt}$The data preprocessing in this study involved several crucial steps to enhance the quality and relevance of the 'car_sales' dataset. The creation of a binary 'luxury' variable classified specific car makes as either luxury or non-luxury. These cars were ultimately filtered out to focus solely on everyday makes and models and not high-end luxury brands. Categorical variables, such as 'engine,' underwent conversion to factors for improved model compatibility. The registered column was transformed into binary values, distinguishing between registered and unregistered vehicles. A new 'usd' column was introduced, representing the price in USD to facilitate standardized comparisons. To address missing values, the 'assembly' column was handled by substituting any gaps with local values. Subsequent filtering steps excluded records with specific identifiers and non-luxury cars, while also removing irrelevant columns such as Addref and City. The dataset underwent an additional filter to specifically focus on Ford cars, ensuring that F-150 Raptor pickup trucks were excluded from our analysis due to being extreme outliers. Lastly, any remaining incomplete rows were removed, resulting in a refined dataset ready for comprehensive analysis in the study on predicting Pakistani used car sales. 
+
+$\hspace{20pt}$The dataset prior to creating a training and testing split had an overall row count of 67,395. Once the data was split, the training set contained 46,795 records, and the testing set contained 15,600 records. Cross-validation was employed in this analysis, with five folds being utilized during the training of all models. An important aspect in the creation of the training and testing data was the use of stratification based on the usd of the vehicle to ensure that the training and testing data had similar distributions of usd values. This was done to ensure that the models were trained and tested with vehicles of similar usd values.
+
+## Preprocessing Recipe
+
+$\hspace{20pt}$A data preprocessing recipe was designed to prepare the training dataset for modeling the relationship between the response variable usd (used car price in USD) and all predictor variables. The recipe, implemented using the 'recipes' package in R, consists of several key steps. Initially, it removes the price and luxury predictors to eliminate correlated and unneeded features. The next step encodes categorical variables into linear functions using Bayesian likelihood encodings. This step excluded nominal predictors that had few levels: fuel, transmission, and assembly. One-hot encoding is then applied to all remaining nominal predictors, introducing binary dummy variables for categorical data. Zero-variance predictors are removed, and all predictors are normalized to ensure consistent scaling. Lastly, a correlation filter is applied, which removes highly correlated numeric predictors, mitigating multicollinearity issues. Overall, this comprehensive data preprocessing recipe aims to enhance the quality and suitability of the dataset for subsequent machine learning modeling, addressing issues such as collinearity, high-level categorical features, and feature normalization.
+
+## Models
+
+$\hspace{20pt}$In the modeling phase of our study, we leverage a diverse set of powerful algorithms to predict used car prices in the dynamic landscape of the Pakistani market. Our possible modeling algorithms include GLMNET, MLP (Multilayer Perceptron), LightGBM, XGBoost, KNN (K-Nearest Neighbors), and decision trees utilizing the CART (Classification and Regression Trees) methodology. Each model brings its own unique strengths to the table, addressing different facets of the complex relationship between predictor variables and the target variable, usd (used car price in USD). GLMNET, an elastic net regularized linear regression model, allows us to navigate through potential sparse and correlated predictors. MLP, a neural network architecture, captures intricate nonlinear relationships within the data. LightGBM and XGBoost, gradient-boosting frameworks, excel at handling large datasets and complex interactions. KNN, a proximity-based algorithm, provides insights into the impact of similar cars on pricing. Finally, decision trees using CART afford interpretability and uncover nonlinear decision boundaries. By employing this diverse ensemble, we aim to comprehensively explore and compare the predictive capabilities of these models, ultimately enhancing our understanding of the nuanced factors influencing used car prices in Pakistan.
+
+## Model Tuning
+
+$\hspace{20pt}$A meticulous tuning process using grid search methodology was used to optimize the predictive performance of each model. A systematic exploration of hyperparameter combinations was carried out for GLMNET, MLP, KNN, and Decision Trees using CART. We were able to identify the most effective parameter configurations for each model, fine-tuning their abilities to capture the intricate patterns in the dataset as a result of this extensive search. Furthermore, for the gradient-boosted models, LightGBM and XGBoost, an extra layer of refinement was added by racing with ANOVA tables.
+
+$\hspace{20pt}$This entailed comparing the performance of various hyperparameter settings in a systematic and statistically informed manner, ensuring that the chosen configurations not only improved predictive accuracy but also offered robustness and stability. The combination of grid search and racing with ANOVA tables allowed for a thorough exploration of the model parameter space, resulting in optimized configurations for each algorithm in our pursuit of accurate and reliable predictions of used car prices in Pakistan's dynamic market.
+
+# Results
+
+$\hspace{20pt}$Each model, namely GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, underwent rigorous training and evaluation. We scrutinize their efficacy in capturing the complex relationships within the dataset and their ability to provide accurate predictions for the target variable, 'usd' (used car price in USD). This section aims to demonstrate the strengths and limitations of each model, shedding light on their individual contributions to the overall predictive framework. By presenting a comprehensive analysis of the results for each model, we offer insights into their respective performances and highlights an understanding of the predictive power of machine learning models within the Pakistani used car market.
+
+\newpage
+
+## GLMNET
+
+$\hspace{20pt}$Results of the GLMNET model were inherently mixed as we knew the relationship between `usd` and the predictors was most likely nonlinear. However, the model was not able to capture some of the nuances of the data, as evidenced by the relatively high RMSE and low R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:GLMNet-Predictions). The model predictions were relatively inaccurate with a training RMSE of `r show_best(car_results,metric='rmse',n=1)[,5]` and standard error of `r show_best(car_results,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:GLMNet-train). GLMNET testing results were marginally better with an RMSE of `r linear_res[1,3]` and a R-Squared of `r linear_res[2,3]` displayed in Table \@ref(tab:GLMNet-test).
+
+```{r GLMNet-train}
+kableExtra::kbl(show_best(car_results,metric='rmse',n=1) |> 
+bind_rows(show_best(car_results,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "GLMNET Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r GLMNet-test}
+kableExtra::kbl(final_linear_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "GLMNET Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r GLMNet-Predictions, fig.cap="GLMNET Training and Testing Predictions"}
+p1 <- car_results %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(car_results, metric = "rmse",desc(mixture))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "GLMNET Model Train Predictions")
+p2 <- final_linear_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "GLMNET Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+```
+
+$\hspace{20pt}$The testing results were also promising, with the model performing similarly to the training results. The RMSE was slightly lower and the R-squared value was slightly higher. This indicates that the model was slightly overfitting the data.
+
+\newpage
+
+## MLP
+
+$\hspace{20pt}$The results of the MLP trained with the BRLUEE engine were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:MLP-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(NET_Race_res,metric='rmse',n=1)[,5]` and standard error of `r show_best(NET_Race_res,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:MLP-train). MLP testing results were marginally better with an RMSE of `r net_res[2,3]` and a R-Squared of `r net_res[2,3]` displayed in Table \@ref(tab:MLP-test).
+
+```{r MLP-train}
+kableExtra::kbl(show_best(NET_Race_res,metric='rmse',n=1) |> 
+bind_rows(show_best(NET_Race_res,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "MLP Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r MLP-test}
+kableExtra::kbl(NET_Final_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "MLP Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r MLP-Predictions, fig.cap="MLP Training and Testing Predictions"}
+p1 <- NET_Race_res %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(NET_Race_res,metric='rmse',desc(hidden_units))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "MLP Model Train Predictions")
+p2 <- NET_Final_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "MLP Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+
+
+```
+
+\newpage
+
+## KNN
+
+$\hspace{20pt}$The results of the KNN model were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:KNN-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,5]` and standard error of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:KNN-train). KNN testing results were marginally better with an RMSE of `r knn_res[1,3]` and a R-Squared of `r knn_res[2,3]` displayed in Table \@ref(tab:KNN-test). The KNN model was a great leap forward in performance compared to the previous two models in Section \@ref(glmnet) and Section \@ref(mlp).
+
+```{r KNN-train}
+
+kableExtra::kbl(show_best(KNN_Work_Spec,metric='rmse',n=1) |> 
+bind_rows(show_best(KNN_Work_Spec,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "KNN Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r KNN-test}
+kableExtra::kbl(final_KNN_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "KNN Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r KNN-Predictions, fig.cap="KNN Training and Testing Predictions"}
+p1 <- KNN_Work_Spec %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(KNN_Work_Spec,metric='rmse',desc(neighbors))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "KNN Model Train Predictions")
+p2 <- final_KNN_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "KNN Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+
+```
+
+\newpage
+
+## Decision Trees using CART
+
+$\hspace{20pt}$Results from the CART model were marginally worse than the KNN as described in Section \@ref(knn), as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(mlp) and \@ref(glmnet). The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:DT-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,5]` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:DT-train). CART Decision Tree testing results were marginally better with an RMSE of `r `dt_res[1,3]` and a R-Squared of `r `dt_res[2,3]` displayed in Table \@ref(tab:DT-test). 
+
+```{r DT-train}
+kableExtra::kbl(show_best(DT_Train,metric='rmse',n=1) |> 
+bind_rows(show_best(DT_Train,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "De Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r DT-test}
+kableExtra::kbl(final_DT_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "NNET Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r DT-Predictions, fig.cap="Decision Tree Training and Testing Predictions"}
+p1 <- DT_Train %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(DT_Train,metric='rmse',desc(tree_depth))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "Decision Tree Model Train Predictions")
+p2 <- final_DT_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "Decision Tree Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+```
+
+\newpage
+
+## LightGBM
+
+$\hspace{20pt}$LightGBM results were the second best of all models tested, as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(knn), \@ref(glmnet), and \@ref(decision trees using cart). The gradient boosted model performance was also similar in both the training and testing sets indicative of good generalization of predictions. The model predictions between both training and testing are displayed in Figure \@ref(fig:lgbm-Predictions). The model predictions were highly accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,5]` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:lgbm-train). LightGBM testing results were slightly better with an RMSE of `r `lgbm_tab_res[1,3]` and a R-Squared of `r `lgbm_tab_res[2,3]` displayed in Table \@ref(tab:lgbm-test). This model was ultimately chosen as the best model out of all the models tested due to the use of the one standard deviation rule to select the best model, which is a more conservative approach to model selection. This model had high performance and was not overfitting the car sales data.
+
+```{r lgbm-train}
+kableExtra::kbl(show_best(lgbm_race_res,metric='rmse',n=1) |> 
+bind_rows(show_best(lgbm_race_res,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "Light GBM Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r lgbm-test}
+kableExtra::kbl(final_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "Light GBM Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r lgbm-Predictions, fig.cap="Light GBM Training and Testing Predictions"}
+p1 <- lgbm_race_res %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(lgbm_race_res,metric='rmse',desc(trees))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "Light GBM Model Train Predictions")
+p2 <- final_res %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "Light GBM Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+```
+
+\newpage
+
+## XGBoost
+
+$\hspace{20pt}$XGBoost was the best performing model in terms of RMSE and R-squared of all fitted models. The model's performance was also consistent across the training and testing sets, indicating that it was generalizing the predictions across the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:xgb-predictions). The model predictions were extremely accurate with a training RMSE of `r show_best(xgb_rs,metric='rmse',n=1)[,5]` and standard error of `r show_best(xgb_rs,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:xgb-train). XGBoost testing results were similar with an RMSE of `r xgb_tab_res[1,3]` and a R-Squared of `r xgb_tab_res[2,3]` displayed in Table \@ref(tab:xgb-test). 
+
+```{r xgb-train}
+kableExtra::kbl(show_best(xgb_rs,metric='rmse',n=1) |> 
+bind_rows(show_best(xgb_rs,metric="rsq",n=1)) |> 
+  select(.metric,mean,std_err),caption = "XGBoost Training Results",booktabs = T) |> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r xgb-test}
+kableExtra::kbl(final_res_xgb |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
+  select(.metric,.estimate),caption = "XGBoost Test Results", booktabs = T)|> 
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+```
+
+```{r xgb-Predictions, fig.cap="XGBoost Training and Testing Predictions"}
+p1 <- xgb_rs %>%
+  collect_predictions(
+    parameters = select_by_one_std_err(xgb_rs,metric='rmse',desc(trees))
+  ) %>%
+  cal_plot_regression(
+    truth = usd,
+    estimate = .pred,
+    alpha = 1 / 3
+  ) +
+  labs(title = "XGBoost Model Train Predictions")
+p2 <- final_res_xgb %>% 
+  collect_predictions() %>% 
+  cal_plot_regression(
+    truth = usd, 
+    estimate = .pred, 
+    alpha = 1 / 4) +
+  labs(title = "XGBoost Model Test Predictions")
+gridExtra::grid.arrange(p1,p2,ncol=2)
+
+```
+The XGBoost model still had some pretty big missed predictions, which are displayed in Figure \@ref(fig:xgb-predictions). The model missed predictions were mostly for cars that were priced higher than 10,000 USD. The model was not able to predict these car accurately due to the sparse data of these types of cars in the testing set.
+
+
+\newpage
+
+## Model Recap
+
+$\hspace{20pt}$The model performance of all models tested is displayed in Figure \@ref(fig:Model-Performance). The model performance was measured using RMSE, which is the square root of the average squared difference between the predicted and actual values. The model performance was also measured using R-squared, which is the proportion of the variance in the dependent variable that is predictable from the independent variable. The model performance was measured using both the training and testing sets. The training set was used to fit the model and the testing set was used to evaluate the model performance for over fitting. The model performance was similar between the training and testing sets for most of the models tested, indicating that the models were generalizing the predictions across the data. The model performance was also similar between the models tested, with the exception of the boosted tree models which excelled at predicting the prices of used cars in Pakistan.
+
+```{r Model-Performance, fig.cap="Model Performance"}
+Model_Performance <- data.frame(ModelNames = c("GLMNET","MLP","KNN","Decision Tree","Light GBM","XGBoost"),
+                                TrainError = c(show_best(car_results,metric='rmse',n=1)[,5],
+                                               show_best(NET_Race_res,metric='rmse',n=1)[,5],
+                                               show_best(KNN_Work_Spec,metric='rmse',n=1)[,5],
+                                               show_best(DT_Train,metric='rmse',n=1)[,5],
+                                               show_best(xgb_rs,metric='rmse',n=1)[,5],
+                                               show_best(lgbm_race_res,metric='rmse',n=1)[,5]),
+                                TestError = c(6282.8891859,5606.3147042,3145.1372420,3364.4609826,2842.0316563,2740.960997))
+
+Model_Performance <- Model_Performance %>%
+  pivot_longer(cols = c(TrainError,TestError), names_to = "ErrorType", values_to = "values")
+
+library(ggrepel)
+
+ggplot(data = Model_Performance,
+       aes(x = fct_reorder(ModelNames,values,.desc=T), y = values,
+           color = ErrorType, shape = ErrorType ,label = round(values, 0))) +
+  geom_point(size = 10) +
+  scale_shape_manual(name = "Error Type", labels = c("Train Error","Test Error"), values=c(16,17))+
+  geom_text_repel(color = "black", size = 3) +
+  coord_flip() +
+  scale_y_continuous(labels=scales::dollar)+
+  labs(title = "RMSE Train and Test Error", 
+       x = "Model",y="RMSE") +
+  theme_bw() + 
+  scale_colour_manual(name = "Error Type",
+                      labels = c("Train Error","Test Error"),
+                      values = c("#F8766D","#619CFF"))
+```
+
+
+
+\newpage
+
+# Discussion
+
+$\hspace{20pt}$In the evaluation of our machine learning models for predicting used car prices in the Pakistani market, the results present a compelling hierarchy of performance. LightGBM emerged as the frontrunner, showcasing superior predictive capabilities and an adeptness in capturing patterns within the used car sales of Pakistan. This gradient boosting ability to handle complex interactions and large datasets makes it a robust tool for addressing the intricacies of the Pakistani used car market. Following closely behind, XGBoost demonstrated commendable performance, solidifying its position as the second-best model in our study. These ensemble methods, rooted in boosting techniques, proved instrumental in navigating the multifaceted relationships between numerous features and used car prices.
+
+
+$\hspace{20pt}$On the flip side, GLMNET and MLP, while contributing valuable insights, emerged as the less optimal models in this context. The relatively lower predictive accuracy of these models suggests potential challenges in capturing the intricate dynamics of used car pricing in Pakistan. However, it's essential to note that the apparent under performance of GLMNET and MLP serves as a constructive revelation rather than a setback. Understanding the limitations of these models is pivotal for refining predictive methodologies and informing future modeling choices. The underlying issues of both the GLMNET and MLP models were a lack of ability to capture the interaction and nonlinearity certain features have on the price of a used vehicle.
+
+$\hspace{20pt}$In summary, our comprehensive model evaluation provides a perspective on the strengths and weaknesses of various predictive algorithms in the unique context of the Pakistani used car market. The outcomes not only identify the top-performing models but also shed light on the intricacies and challenges inherent in predicting used car prices. This understanding positions our study as a valuable resource for researchers, practitioners, and stakeholders seeking to navigate the dynamic landscape of the Pakistani used car market, fostering a continuous cycle of improvement and refinement in predictive modeling strategies.
+
+\newpage
+
+# Appendix
+
+## Appendix A: Data Dictionary
+
+| Variable Name | Description | Type |
+|---------------|-------------|------|
+| assembly | The country where the car was assembled | Factor |
+| body | The body type of the car | Factor |
+| make | The car manufacturer | Factor |
+| model | The car model | Factor |
+| year | The year the car was manufactured | Factor |
+| engine | The engine capacity of the car | Factor |
+| transmission | The transmission type of the car | Factor |
+| fuel | The fuel type of the car | Factor |
+| color | The color of the car | Factor |
+| registered | Whether the car is registered or not | Factor |
+| mileage | The mileage of the car | Numeric |
+| price | The price of the car in Pakistani Rupees | Numeric |
+| luxury | Whether the car is a luxury car or not | Factor |
+| usd | The price of the car in US Dollars | Numeric |
+
+\newpage
+
+## Appendix B: Model Performance Metrics
+
+```{r}
+all_model_training_Rmse <- c(7051.5063,6235.1162090,3146.8545379,3343.7587802,2946.1450871,2842.2375825)
+all_model_training_std_err <- c(191.7094765,203.3696426,146.2410052,260.5655685,230.5682199,180.531215)
+
+
+all_model_training_Rsq <- c(0.8005,0.8436827,0.9600549,0.9544921,0.9645135,0.9672529)
+all_model_training_rsq_error <- c(0.0114633,0.0119983,0.0036643,0.0069266,0.0053957,0.003974)
+
+all_model_testing_Rmse <- c(6282.8891859,5606.3147042,3145.1372420,3364.4609826,2842.0316563,2740.960997)
+all_model_test_rqs <- c(0.8107064,0.8492034,0.9522852,0.9472024,0.9614465,0.964083)
+
+all_model_performance <- data.frame(Model = c("GLMNET","MLP","KNN","Decision Tree","Light GBM","XGBoost"),
+                                     `Training RMSE` = all_model_training_Rmse,
+                                     `Train RMSE Std Error` = all_model_training_std_err,
+                                     `Train_Rsq` = all_model_training_Rsq,
+                                     `Train_Rsq_Std_Error` = all_model_training_rsq_error,
+                                     `Test_RMSE` = all_model_testing_Rmse)
+
+kableExtra::kbl(all_model_performance,caption = "Model Performance Metrics",booktabs = T,col.names = c('Model','Train RMSE','Train RMSE Std Error','Train Rsq','Train Rsq Std Error','Test RMSE')) |>
+  kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
+
+```
+
+
+
+
+
