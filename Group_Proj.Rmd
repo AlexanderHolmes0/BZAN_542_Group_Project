@@ -49,11 +49,16 @@ car_sales <- car_sales |>
   engine=as.factor(engine),
   registered=ifelse(registered=="Un-Registered",0,1),
   usd = price*0.003541,
+  year=as.factor(year),
+  fuel=as.factor(fuel),
+  transmission=as.factor(transmission),
+  engine=as.factor(engine),
   #miles = mileage*0.621371,
   assembly=replace_na(assembly,"Local")) |> 
   filter(addref!=7770572 & luxury == 0) |> 
   select(-city,-addref) |> 
-  filter(!(make =='Ford' & body == "Double Cabin"))
+  filter(!(make =='Ford' & body == "Double Cabin")) |> 
+  filter(usd<=80000)
 
 car_sales |> 
   filter(make=='Ford')
@@ -61,12 +66,8 @@ car_sales |>
 car_sales <- car_sales[complete.cases(car_sales),]
 
 kbb_colors_df <- data.frame(
-  color = c("Black", "White", "Silver", "Gray", "Blue", "Red", "Green", "Brown", "Yellow", "Orange","Beige","Maroon","Gold","Bronze","Burgandy","Magenta","Pink","Purple","Navy","Graphite Grey","")
+  color = c("Black", "White", "Silver", "Gray", "Blue", "Red", "Green", "Brown", "Yellow", "Orange","Beige","Maroon","Gold","Bronze","Pink","Purple","Navy")
 )
-
-car_sales <- car_sales |> 
-  mutate(fuzzy_colors = kbb_colors_df[amatch(car_sales$color, kbb_colors_df$color,method = 'jaccard',maxDist = 11),])
-
 
 car_split <- initial_split(car_sales,strata = price)
 car_train <- training(car_split)
@@ -74,21 +75,21 @@ car_test <- testing(car_split)
 car_folds <- vfold_cv(car_train, v = 5, strata = usd)
 
 
-ggplot(car_train, aes(x = year)) +
-  geom_histogram(binwidth = 1) +
+ggplot(car_sales, aes(x = year)) +
+  geom_bar(binwidth = 1) +
   labs(x = "Year", y = "Count", title = "Distribution of Car Year") +
-  facet_wrap(~ body) +
+  coord_flip()+
   theme_minimal()
-ggplot(car_train, aes(x = log(usd))) +
+ggplot(car_sales, aes(x = log(usd))) +
   geom_histogram() +
   labs(x = "Price (USD)", y = "Count", title = "Distribution of Car Price") +
   theme_minimal()
-ggplot(car_train, aes(x = mileage)) +
+ggplot(car_sales, aes(x = mileage)) +
   geom_histogram(binwidth = 10000) +
   labs(x = "Mileage (Km)", y = "Count", title = "Distribution of Car Mileage") +
   theme_minimal()
 #stacked bar chart
-ggplot(car_train, aes(x = fuel, fill = fuel)) +
+ggplot(car_sales, aes(x = fuel, fill = fuel)) +
   geom_bar() +
   labs(x = "Fuel Type", y = "Count", title = "Distribution of Car Fuel Type") +
   facet_wrap(~ transmission) +
@@ -112,24 +113,20 @@ ggplot(car_sales |> group_by(make) |> summarise(count=n(),average_usd=mean(usd))
   theme(legend.position = "none")+
   scale_y_continuous(labels=scales::dollar)
 
-ggplot(car_sales, aes(x=as.factor(fuzzy_colors),y=log(usd)))+
-  geom_boxplot()+coord_flip()+theme(legend.position = "none")+labs(x="Color",y="Price (USD)")
-#more exploratory data analysis plots not by make; there are other columns like mileage and price
-
 #scatterplot
-ggplot(car_train, aes(x = mileage, y = usd)) +
+ggplot(car_sales, aes(x = mileage, y = usd)) +
   geom_point() +
   geom_smooth()+
   labs(x = "Mileage (Km)", y = "Price (USD)", title = "Price vs Mileage") +
   theme_minimal()
 #scatterplot
-ggplot(car_train, aes(x = mileage, y = log(usd))) +
+ggplot(car_sales, aes(x = mileage, y = log(usd))) +
   geom_point(alpha=.1) +
   geom_smooth()+
   labs(x = "Mileage (KM)", y = "Log (USD)", title = "Price vs Year") +
   theme_minimal()
 #scatterplot
-ggplot(car_train, aes(x = log(mileage), y = log(usd))) +
+ggplot(car_sales, aes(x = log(mileage), y = log(usd))) +
   geom_point() +
   geom_smooth()+
   labs(x = "Miles", y = "Price (USD)", title = "Price vs Year") +
@@ -137,21 +134,582 @@ ggplot(car_train, aes(x = log(mileage), y = log(usd))) +
 
 ```
 
+```{r}
+color_mapping <- list(
+  "Metallic" = "Unknown",
+  "Beige" = "Beige",
+  "Purple" = "Purple",
+  "Phantom Brown" = "Brown",
+  "Pink" = "Pink",
+  "Milky Beige" = "Beige",
+  "Dark Blue" = "Blue",
+  "White Pearl" = "White",
+  "Snow White Pearl" = "White",
+  "Obsidian Black Metallic" = "Black",
+  "Strong Blue" = "Blue",
+  "Alabaster Silver" = "Silver",
+  "Alpine White" = "White",
+  "Lunar Silver" = "Silver",
+  "Steller White" = "White",
+  "Aqua Silver" = "Silver",
+  "Gold" = "Gold",
+  "Bronze Mica" = "Bronze",
+  "Mercury Blue" = "Blue",
+  "Clear White" = "White",
+  "Attitude Black Mica" = "Black",
+  "Iridium Silver" = "Silver",
+  "Urban Titanium" = "Silver",
+  "silver metallic" = "Silver",
+  "Brown" = "Brown",
+  "Sparkling Silver" = "Silver",
+  "Diamond Black" = "Black",
+  "Snow White" = "White",
+  "Satin silver metallic" = "Silver",
+  "Stellar White" = "White",
+  "Buckiham Blue" = "Blue",
+  "Orange" = "Orange",
+  "White " = "White",
+  "Bronze" = "Bronze",
+  "Bluish Black Pearl" = "Black",
+  "Sand Khaki Pearl" = "Beige",
+  "Oxford Blue" = "Blue",
+  "White Pearl Crystal Shine" = "White",
+  "Grey Metallic" = "Gray",
+  "Silky Silver Metallic" = "Silver",
+  "Silver Mica Metallic" = "Silver",
+  "Polar White" = "White",
+  "Armour Silver" = "Silver",
+  "Black Metallic" = "Black",
+  "Cherry Black" = "Black",
+  "Golden" = "Gold",
+  "Burgundy" = "Maroon",
+  "Gray" = "Gray",
+  "Galaxy Balck" = "Black",
+  "Crystal Pearl" = "White",
+  "Arctic White" = "White",
+  "Diamond Metallic Black" = "Black",
+  "Black Mica Metallic" = "Black",
+  "mythos Black Metallic" = "Black",
+  "Gray Metallic" = "Gray",
+  "Sandy Beige" = "Beige",
+  "Brilliant Blue Metallic" = "Blue",
+  "Serenity White Pearl" = "White",
+  "Superior White" = "White",
+  "Ruby Red" = "Red",
+  "Panthera Metal" = "Unknown",
+  "Cerulean Blue" = "Blue",
+  "Red Mica" = "Red",
+  "Dark Maroon" = "Maroon",
+  "Fery Red" = "Red",
+  "Galaxy Black" = "Black",
+  "Cosmic Red" = "Red",
+  "Navy" = "Navy",
+  "Light Blue Metallic" = "Blue",
+  "Teffeta White" = "White",
+  "Diamond White" = "White",
+  "Solid Black" = "Black",
+  "Black Pearl" = "Black",
+  "Quartz Black" = "Black",
+  "Pure White Pearl" = "White",
+  "Pearl Red" = "Red",
+  "Absolutely Red" = "Red",
+  "Orient Blue Metallic" = "Blue",
+  "Polished Metal Metallic" = "Silver",
+  "white" = "White",
+  "Noble White" = "White",
+  "Ralley Red" = "Red",
+  "Glacier White" = "White",
+  "Harvard Blue" = "Blue",
+  "Sunset Red" = "Red",
+  "Orion Blue" = "Blue",
+  "Cool Silver Metallic" = "Silver",
+  "Sporty Blue Metallic" = "Blue",
+  "Metallic Grey" = "Gray",
+  "Moco Peach" = "Pink",
+  "Black Diamond Metallic" = "Black",
+  "Blue Metallic" = "Blue",
+  "Brown Mica" = "Brown",
+  "Mineral Grey" = "Gray",
+  "Brixton Blue" = "Blue",
+  "Phoenix Red" = "Red",
+  "Luna Silver Metallic" = "Silver",
+  "Aquamarine Blue" = "Blue",
+  "Pearl Black" = "Black",
+  "Nighthawk Black Pearl" = "Black",
+  "strong blue" = "Blue",
+  "Super Black Pearl" = "Black",
+  "Jet Grey" = "Gray",
+  "Full Moon Silver" = "Silver",
+  "Labrador Black Pearl" = "Black",
+  "Sand Beige" = "Beige",
+  "Super Red V" = "Red",
+  "Dark Blue Mica" = "Blue",
+  "Midnight Blue" = "Blue",
+  "Dignity Brown Pearl Metallic" = "Brown",
+  "Bold Beige Metallic" = "Beige",
+  "graphite grey" = "Gray",
+  "Silver Pearl" = "Silver",
+  "Graphite" = "Gray",
+  "Captiva Blue Pearl" = "Blue",
+  "Whiteq" = "White",
+  "Metallic Red" = "Red",
+  "Attitude Metallic" = "Unknown",
+  "Manufaktur Opalite White Bright" = "White",
+  "Crimson Spark Red" = "Red",
+  "Dorado Gold" = "Gold",
+  "Mineral Gray Metallic" = "Gray",
+  "Arctic Silver Metallic" = "Silver",
+  "Black Sapphire Metallic" = "Black",
+  "Premium Crystal Red Metallic" = "Red",
+  "Manhattan Gray Metallic" = "Gray",
+  "Eminent White Pearl" = "White",
+  "Super Pearl Black" = "Black",
+  "Gun Metallic" = "Gray",
+  "Precious Wite Pearl" = "White",
+  "Light Rose Mica Metallic" = "Pink",
+  "White Pearl Crystral" = "White",
+  "Glacier White Metallic" = "White",
+  "Florett Silver Metallic" = "Silver",
+  "White Pearl Crystal" = "White",
+  "Hamilton White" = "White",
+  "Vivid Blue Pearl" = "Blue",
+  "Star Silver Metallic" = "Silver",
+  "DarkBlue" = "Blue",
+  "Pearl White" = "White",
+  "Meteoroid Gray Metallic" = "Gray",
+  "Magnetic Grey Metallic" = "Gray",
+  "Meteoroid Gray Metalic" = "Gray",
+  "Dolomite White Metallic" = "White",
+  "Black Diamond" = "Black",
+  "Sand Black Pearl" = "Black",
+  "Dimaond White Metallic" = "White",
+  "Carnelian Red Pearl" = "Red",
+  "Premium White" = "White",
+  "Brilliant White Pearl" = "White",
+  "Dark Emerald Mica" = "Green",
+  "Celestial Black" = "Black",
+  "Crystal black met" = "Black",
+  "Diamond White Metallic" = "White",
+  "Mythos Black Metallic" = "Black",
+  "Platinum White" = "White",
+  "Carrara White Metallic" = "White",
+  "Ebony" = "Black",
+  "Farringdon Red" = "Red",
+  "Frost Green Mica" = "Green",
+  "Light Silver Metallic" = "Silver",
+  "Habreneno Red" = "Red",
+  "Night Black" = "Black",
+  "Bayou Blue" = "Blue",
+  "Granada Black Pearl" = "Black",
+  "Cool White Pearl" = "White",
+  "Armor Silver" = "Silver",
+  "Storm Silver Metallic" = "Silver",
+  "Brilliant Black" = "Black",
+  "Iridium Silver Metallic" = "Silver",
+  "Nautic Blue  Metallic" = "Blue",
+  "Crystal Black Pearl and Silver" = "Black",
+  "Dark Blue Pearl" = "Blue",
+  "Shadow Black" = "Black",
+  "Moonstone Metallic" = "Unknown",
+  "Obsidian Black" = "Black",
+  "Nighthawk Black" = "Black",
+  "Alabaster Silver Metallic" = "Silver",
+  "Red Mica Metallic" = "Red",
+  "Royal Blue" = "Blue",
+  "Silver metallic" = "Silver",
+  "Ebony Twilight Metallic" = "Black",
+  "Fuji White" = "White",
+  "Pearl white" = "White",
+  "Fizz Blue Pearl Metallic" = "Blue",
+  "Dark Red Mica" = "Red",
+  "Graphite Grey Pearl" = "Gray",
+  "Galactic Grey Metallic" = "Gray",
+  "Glass Metallic" = "Unknown",
+  "Mellinnum Silver" = "Silver",
+  "Gold Dust" = "Gold",
+  "Java Black" = "Black",
+  "Brilliant Blue" = "Blue",
+  "Torino Red Pearl" = "Red",
+  "Premium White Pearl II" = "White",
+  "dark bluish grey" = "Gray",
+  "Dark Grey" = "Gray",
+  "Alpine Whire" = "White",
+  "Night Blacl" = "Black",
+  "Premium Yellow Pearl" = "Yellow",
+  "Blue Eclipse Metallic" = "Blue",
+  "Dark Brown" = "Brown",
+  "Super Black" = "Black",
+  "golden" = "Gold",
+  "Smoke Grey" = "Gray",
+  "Aurora Black Pearl" = "Black",
+  "Pitch Black" = "Black",
+  "Race Red" = "Red",
+  "Night Hawk Black Pearl" = "Black",
+  "Black Metalic" = "Black",
+  "Crystal Red" = "Red",
+  "Rich Espresso" = "Brown",
+  "Carbon Black Metallic" = "Black",
+  "Pure Red" = "Red",
+  "Habareno Red" = "Red",
+  "Meteriod Gray Metallic" = "Gray",
+  "Orange Fusion" = "Orange",
+  "Designo Cashmere White" = "White",
+  "Silver Streak Mica" = "Silver",
+  "Dolomite Brown Metallic" = "Brown",
+  "Avant Garde Bronze Metallic" = "Bronze",
+  "Atmandine Black" = "Black",
+  "Creamy White" = "White",
+  "Abyss Grey Metallic" = "Gray",
+  "Brilliant White Metallic" = "White",
+  "Morning Mist Blue Metallic" = "Blue",
+  "Cherry Pearl Crystal" = "Red",
+  "Solar Yellow" = "Yellow",
+  "Chiffon Ivory Metallic" = "Beige",
+  "Fiz Blue Pearl Metallic" = "Blue",
+  "Lilac Silver" = "Silver",
+  "Carnelian Red" = "Red",
+  "Teal Blue" = "Blue",
+  "Tenorite Grey Metallic" = "Gray",
+  "Cayenne Red" = "Red",
+  "Fiery Red" = "Red",
+  "Rosewood Maroon" = "Maroon",
+  "Designo Mocha Black Metallic" = "Black",
+  "super white II" = "White",
+  "Wine Red" = "Red",
+  "Ultra Black Solidic" = "Black",
+  "Milk Tea Beige Metallic" = "Beige",
+  "Moonlight Blue Metallic" = "Blue",
+  "Premium Silver Metallic" = "Silver",
+  "Phantom Red Metallic" = "Red",
+  "Light Beige Metallic" = "Beige",
+  "Habanero Red" = "Red",
+  "Crimson Red" = "Red",
+  "Salsa Red Pearl" = "Red",
+  "Citron Green" = "Green",
+  "Blue Mica Metallic" = "Blue",
+  "Sea Green" = "Green",
+  "Kemora Grey" = "Gray",
+  "Dark Metal Grey" = "Gray",
+  "White Platinum Metallic Tri Coat" = "White",
+  "Midnight Blue Beam Metallic and Silver" = "Blue",
+  "Santorini Metallic Black" = "Black",
+  "Sunshine Gold" = "Gold",
+  "Cosmic Black Pearl" = "Black",
+  "Satin Silver" = "Silver",
+  "Wine" = "Maroon",
+  "Golden Black" = "Black",
+  "White Orchid Pearl" = "White",
+  "Graphite Pearl" = "Gray",
+  "Shimmering Green" = "Green",
+  "Red Wine" = "Red",
+  "Oxford White" = "White",
+  "Brilliant Sporty Blue Metallic" = "Blue",
+  "Pearl White Metallic" = "White",
+  "Black Sapphire" = "Black",
+  "Uyuni White" = "White",
+  "Carrera White" = "White",
+  "Cool Black Metallic" = "Black",
+  "Deep Blue Metallic" = "Blue",
+  "Twilight Grey Pearl" = "Gray",
+  "Dakota Gray Metallic" = "Gray",
+  "Nebula Gray Pearl" = "Gray",
+  "Ocean Blue" = "Blue",
+  "Brilliant Silver Metallic" = "Silver",
+  "Artic blue pearl" = "Blue",
+  "Brilliant Sporty Blue" = "Blue",
+  "Pewter Grey Metallic" = "Gray",
+  "Campagno Red" = "Red",
+  "Navy Blue" = "Navy",
+  "Kalahari Beige Metallic" = "Beige",
+  "Rio Tomato" = "Red",
+  "designo Mocha Black" = "Black",
+  "Ice Titanium Mica" = "Gray",
+  "Champagne Gold Metallic" = "Gold",
+  "Boost Blue Pearl Metallic" = "Blue",
+  "Dark Teal Mica" = "Green",
+  "Silver " = "Silver",
+  "Shining Pearl White" = "White",
+  "Wine Red Metallic" = "Red",
+  "Silver Mica Mettalic" = "Silver",
+  "Jungle Green" = "Green",
+  "Dark Brown Mica Metallic" = "Brown",
+  "Wedgewood Blue Metallic" = "Blue",
+  "Magnesium Metallic" = "Gray",
+  "Light Rose Metallic" = "Pink",
+  "green mica graphite" = "Green",
+  "Dark Green Mica" = "Green",
+  "Jet Black" = "Black",
+  "Metallic Silver" = "Silver",
+  "Graphite grey" = "Gray",
+  "Piemont Red" = "Red",
+  "Morpho Blue Pearl" = "Blue",
+  "Barolo Black Metallic" = "Black",
+  "Beige Mica Metallic" = "Beige",
+  "Tidewater Blue Metallic" = "Blue",
+  "Strong Blue Metallic" = "Blue",
+  "Phytonic Blue" = "Blue",
+  "Obsidian" = "Black",
+  "Sterling Silver Metallic" = "Silver",
+  "Pure Metal Silver" = "Silver",
+  "Cuvee Silver Metallic" = "Silver",
+  "Tuxedo Black Metallic" = "Black",
+  "Cosmic Blue" = "Blue",
+  "Cosmos Black" = "Black",
+  "Ablaze Red Pearl" = "Red",
+  "Cobalt Blue Metallic" = "Blue",
+  "Timeless Back" = "Black",
+  "Brilliant Red" = "Red",
+  "Solid Red" = "Red",
+  "Lava Red" = "Red",
+  "Ruby Red" = "Red",
+  "Burgundy Red" = "Maroon",
+  "Chili Red" = "Red",
+  "Fire Red" = "Red",
+  "Carmine Red" = "Red",
+  "Scarlet Red" = "Red",
+  "Candy Red" = "Red",
+  "Merlot Red" = "Maroon",
+  "Crimson Red" = "Red",
+  "Garnet Red" = "Maroon",
+  "Sunset Red" = "Red",
+  "Wine Red" = "Maroon",
+  "Blaze Red" = "Red",
+  "Coral Red" = "Red",
+  "Raspberry Red" = "Red",
+  "Tango Red" = "Red",
+  "Velvet Red" = "Maroon",
+  "Desert Red" = "Red",
+  "Bordeaux Red" = "Maroon",
+  "Vintage Red" = "Red",
+  "Imperial Red" = "Red",
+  "Poppy Red" = "Red",
+  "Fiesta Red" = "Red",
+  "Rosso Red" = "Red",
+  "Cardinal Red" = "Red",
+  "Mars Red" = "Red",
+  "Blush Red" = "Red",
+  "Sangria Red" = "Red",
+  "Candy Apple Red" = "Red",
+  "Brick Red" = "Maroon",
+  "Matrix Red" = "Red",
+  "Persian Red" = "Red",
+  "Siren Red" = "Red",
+  "Crimson" = "Red",
+  "Deep Red" = "Red",
+  "Firebrick Red" = "Red",
+  "Mahogany Red" = "Maroon",
+  "Oxblood Red" = "Maroon",
+  "Terra Cotta Red" = "Red",
+  "Heirloom Red" = "Red",
+  "Dark Red" = "Red",
+  "Maroon" = "Maroon",
+  "Burgundy" = "Maroon",
+  "Crimson" = "Red",
+  "Cherry Red" = "Red",
+  "Apple Red" = "Red",
+  "Strawberry Red" = "Red",
+  "Rose Red" = "Red",
+  "Coral" = "Red",
+  "Wine" = "Maroon",
+  "Ruby" = "Red",
+  "Blood Red" = "Red",
+  "Scarlet" = "Red",
+  "Rust Red" = "Red",
+  "Copper Red" = "Red",
+  "Tomato Red" = "Red",
+  "Vermilion Red" = "Red",
+  "Sienna Red" = "Red",
+  "Chestnut Red" = "Maroon",
+  "Burgundy Wine" = "Maroon",
+  "Claret Red" = "Red",
+  "Dark Cherry Red" = "Red",
+  "Pomegranate Red" = "Red",
+  "Ruby Wine" = "Maroon",
+  "Bordeaux" = "Maroon",
+  "Magenta" = "Purple",
+  "Fuchsia" = "Pink",
+  "Hot Pink" = "Pink",
+  "Cerise Pink" = "Pink",
+  "Carnation Pink" = "Pink",
+  "Bubblegum Pink" = "Pink",
+  "Blush Pink" = "Pink",
+  "Rose Pink" = "Pink",
+  "Salmon Pink" = "Pink",
+  "Baby Pink" = "Pink",
+  "Pale Pink" = "Pink",
+  "Light Pink" = "Pink",
+  "Dusty Pink" = "Pink",
+  "Soft Pink" = "Pink",
+  "Orchid Pink" = "Pink",
+  "Peach Pink" = "Pink",
+  "Rose Gold" = "Pink",
+  "Flamingo Pink" = "Pink",
+  "Watermelon Pink" = "Pink",
+  "Cotton Candy Pink" = "Pink",
+  "Strawberry Pink" = "Pink",
+  "Candy Floss Pink" = "Pink",
+  "Bubble Gum Pink" = "Pink",
+  "Coral Pink" = "Pink",
+  "Hibiscus Pink" = "Pink",
+  "Raspberry Pink" = "Pink",
+  "Shocking Pink" = "Pink",
+  "Neon Pink" = "Pink",
+  "Vivid Pink" = "Pink",
+  "Electric Pink" = "Pink",
+  "Bright Pink" = "Pink",
+  "Deep Pink" = "Pink",
+  "Dark Pink" = "Pink",
+  "Fuchsia Pink" = "Pink",
+  "Magenta Pink" = "Pink",
+  "Plum Pink" = "Pink",
+  "Purple Pink" = "Pink",
+  "Lavender Pink" = "Pink",
+  "Violet Pink" = "Pink",
+  "Orchid" = "Purple",
+  "Lavender" = "Purple",
+  "Lilac" = "Purple",
+  "Mauve" = "Purple",
+  "Violet" = "Purple",
+  "Amethyst" = "Purple",
+  "Grape" = "Purple",
+  "Plum" = "Purple",
+  "Indigo" = "Purple",
+  "Eggplant" = "Purple",
+  "Mulberry" = "Purple",
+  "Wine Purple" = "Purple",
+  "Magenta Purple" = "Purple",
+  "Royal Purple" = "Purple",
+  "Iris" = "Purple",
+  "Periwinkle" = "Purple",
+  "Orchid Purple" = "Purple",
+  "Lavender Purple" = "Purple",
+  "Thistle" = "Purple",
+  "Lilac Purple" = "Purple",
+  "Mauve Purple" = "Purple",
+  "Violet Purple" = "Purple",
+  "Amethyst Purple" = "Purple",
+  "Grape Purple" = "Purple",
+  "Plum Purple" = "Purple",
+  "Indigo Purple" = "Purple",
+  "Eggplant Purple" = "Purple",
+  "Mulberry Purple" = "Purple",
+  "Wisteria" = "Purple",
+  "Byzantine" = "Purple",
+  "Fandango" = "Purple",
+  "Heliotrope" = "Purple",
+  "Pansy" = "Purple",
+  "Veronica" = "Purple",
+  "Orchidaceous" = "Purple",
+  "Lavendula" = "Purple",
+  "Magenta Lavender" = "Purple",
+  "Purple Haze" = "Purple",
+  "Purple Heart" = "Purple",
+  "Purple Mountain" = "Purple",
+  "Purple Navy" = "Navy",
+  "Purple Plum" = "Purple",
+  "Royal Lavender" = "Purple",
+  "Vivid Violet" = "Purple",
+  "Wild Orchid" = "Purple",
+  "Wineberry" = "Purple",
+  "Jazzberry" = "Purple",
+  "Plum Velvet" = "Purple",
+  "Raspberry Radiance" = "Purple",
+  "Silver Metallic" = "Silver",
+  "Super White" = "White",
+  "Albastar Silver" = "Silver",
+  "Fire Quartz Red" = "Red",
+  "Crystal Black Pearl" = "Black",
+  "Unique Orange" = "Orange",
+  "Silky Silver" = "Silver",
+  "Grey Graphite" = "Gray",
+  "Pearl White III" = "White",
+  "Bright Silver Metallic" = "Silver",
+  "Solid White" = "White",
+  "Modern Steel Metallic" = "Gray",
+  "Super White II" = "White",
+  "Crystal Black" = "Black",
+  "Super White " = "White",
+  "Cerullian Blue" = "Blue",
+  "Taffeta White" = "White",
+  "Attitude Black" = "Black",
+  "Lunar Silver Metallic" = "Silver",
+  "Black Mica" = "Black",
+  "Graphite Grey" = "Gray",
+  "Beige Metallic" = "Beige",
+  "Brown Mica" = "Brown",
+  "Unlisted" = "Unknown",
+  "Space Gray" = "Gray",
+  "Premiun Sunlight White Pearl" = "White",
+  "Rallye Red" = "Red",
+  "Milano Red" = "Red",
+  "Premium White Pearl" = "White",
+  "Dark Green" = "Green",
+  "Urban titanium" = "Gray",
+  "Whitw" = "White",
+  "Platinum White Pearl" = "White",
+  "Black " = "Black",
+  "Ash Gray" = "Gray",
+  "Black Sand Pearl" = "Black",
+  "Olive Green" = "Green",
+  "Medium Silver" = "Silver",
+  "Fairy Red" = "Red",
+  "Brilliant Silver" = "Silver",
+  "SILVER MET" = "Silver",
+  "silver" = "Silver",
+  "Aztec Green Pearl" = "Green",
+  "Phantom Grey Pearl" = "Gray",
+  "Midnight Black" = "Black",
+  "Hampton Grey" = "Gray",
+  "Smart Black" = "Black",
+  "Innocent Pink Pearl" = "Pink",
+  "Attitude Black " = "Black",
+  "Super white " = "White",
+  "metallic mat black" = "Black",
+  "Mica Beige Metallic" = "Beige",
+  "dark bluish grey" = "Gray",
+  "Morpho Blue Pearl" = "Blue",
+  "Super white" = "White",
+  "Turquoise" = "Blue",
+  " Brown Mica" = "Brown",
+  " dark bluish grey" = "Gray",
+  " Morpho Blue Pearl" = "Blue",
+  "Grey"="Gray"
+)
+
+color_mapping_vector <- setNames(unlist(color_mapping), names(color_mapping))
+
+# Apply the color mapping to the 'car_sales' data frame
+car_sales <- car_sales %>%
+  mutate(kbb_colors = ifelse(color %in% names(color_mapping_vector), 
+                             color_mapping_vector[color], 
+                             color))
+
+# Check the structure of the updated data frame
+#str(car_sales)
+
+sum(is.na(car_sales$kbb_colors))
+
+unique(car_sales$kbb_colors)
+car_sales <- car_sales |> 
+  select(-color)
+```
+
+
+
 ```{r recipe}
 car_recipe <- recipe(usd ~ .,data=car_train) |> 
   step_rm(price,luxury) |> 
   step_lencode_mixed(all_nominal_predictors(),-fuel,-transmission,
                      -assembly,outcome = vars(usd)) |> 
   step_dummy(all_nominal_predictors(),one_hot = TRUE) |>
-  step_other(all_nominal_predictors(),threshold = .3) |> 
   step_zv(all_predictors()) |>
-  step_normalize(all_numeric_predictors()) |> 
+  step_normalize(all_numeric_predictors(),-assembly_Local,-fuel_Diesel,-fuel_Hybrid,-fuel_Petrol,-assembly_Imported,-transmission_Manual,-registered,-transmission_Automatic) |> 
   step_corr(all_numeric_predictors(), threshold = 0.9)
 
 juice(prep(car_recipe))
 
 bake(prep(car_recipe),new_data=car_test)
-ggplot(juice(prep(car_recipe)) |> select(usd),aes(x=usd))+
+ggplot(juice(prep(car_recipe)) |> select(usd),aes(x=log(usd)))+
   geom_histogram()
 ```
 
@@ -171,8 +729,8 @@ car_results <- car_workflow |>
                 grid = 25,
                 control = control_resamples(save_pred = T),
                 metrics = reg_metrics)
-
 collect_metrics(car_results)
+
 
 kableExtra::kbl(show_best(car_results,metric='rmse',n=1) |> 
 bind_rows(show_best(car_results,metric="rsq",n=1)) |> 
@@ -180,7 +738,6 @@ bind_rows(show_best(car_results,metric="rsq",n=1)) |>
   kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
 
 glmnet_best <- car_results %>% select_by_one_std_err(mixture, metric = "rmse")
-collect_metrics(glmnet_best)
 ```
 
 ```{r workflow_results}
@@ -217,7 +774,8 @@ final_linear_res %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_linear_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq'))
+linear_res <- final_linear_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq'))
+linear_res[1,3];linear_res[2,3]
 linear_pred <- final_linear_res |> collect_predictions()
 linear_pred |> 
   mutate(resid=usd-.pred) |> 
@@ -261,7 +819,7 @@ lgbm_res <-
   )
 
 collect_metrics(lgbm_res)
-show_best(lgbm_res, metric = c("rmse"))
+ show_best(lgbm_res, metric = c("rmse"),n=1)
 show_best(lgbm_res, metric = c("rsq"))
 lgbm_best <- select_best(lgbm_res, metric = "rmse")
 select_by_one_std_err(lgbm_res, metric = "rmse",desc(trees))
@@ -317,9 +875,6 @@ final_wflow <-
   lgbm_wflow %>%
   finalize_workflow(best_param)
 
-```
-
-```{r final model}
 set.seed(123)
 final_res <- 
   final_wflow %>% 
@@ -335,10 +890,25 @@ final_res %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_res |> collect_metrics()
+lgbm_tab_res <- final_res |> collect_metrics()|> filter(.metric %in% c('rmse','rsq'))
+library(gbm)
+library(vip)
+fit <- gbm(
+  usd~ ., 
+  data = juice(prep(car_recipe)),
+  shrinkage = 0.057,
+  interaction.depth = 10,
+  n.minobsinnode = 9,
+  n.trees = 888
+)
+
+vip(fit)+
+  labs(title="LightGBM Variable Importance Plot")
+
 ```
 
-#lets see if XGBoost can do anybetter/?
+
+# XGBoost
 
 ```{r}
 xgb_spec <- boost_tree( #model spec basically showing what we wanna do    
@@ -358,14 +928,14 @@ xgb_wf <- workflow() %>%  #add the preproc with the model spec
 
 xgb_grid <- grid_latin_hypercube( 
   #cover all bases in the ~7 dimensional space of possible hyper params
-  trees(range = c(300,1000)),
+  trees(range = c(300,1200)),
   tree_depth(range = c(4,20)),
   min_n(range = c(1,10)),
   loss_reduction(),
   sample_size = sample_prop(range = c(.4,.9)),
   mtry(range = c(4,12)),
   learn_rate(range = c(-4,-1)),
-  size = 10
+  size = 5
   )
 
 xgb_rs <- tune_race_anova(
@@ -403,7 +973,7 @@ final_res_xgb %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_res_xgb |> collect_metrics()
+xgb_tab_res <- final_res_xgb |> collect_metrics() |> filter(.metric %in% c('rmse','rsq'))
 ```
 
 # Knn 
@@ -465,7 +1035,7 @@ final_KNN_res %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_KNN_res |> collect_metrics()
+knn_res <- final_KNN_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq'))
 ```
 
 # DECISION TREE #Cart
@@ -485,7 +1055,7 @@ DT_Train <-
   DT_workflow %>%
   tune_race_anova(
     resamples = car_folds,
-    grid = 25, 
+    grid = 10, 
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
@@ -527,7 +1097,7 @@ final_DT_res %>%
     estimate = .pred, 
     alpha = 1 / 4)
 
-final_DT_res |> collect_metrics()
+dt_res <- final_DT_res |> collect_metrics()|> filter(.metric %in% c('rmse','rsq'))
 ```
 
 # Brulee NNET
@@ -539,7 +1109,7 @@ nn_spec <- mlp(
   penalty = tune(),
   epochs = tune(),
   learn_rate = tune(),
-  activation = 'relu'
+  activation = 'elu'
 ) %>%  
   set_engine("brulee") %>% 
   set_mode("regression")
@@ -553,7 +1123,7 @@ NET_Race_res <-
   NNET_workflow %>%
   tune_race_anova(
     resamples = car_folds,
-    grid = 20, 
+    grid = 10, 
     metrics = reg_metrics,
     control=control_race(save_pred = TRUE,verbose=TRUE)
   )
@@ -591,13 +1161,103 @@ NET_Final_res %>%
     truth = usd, 
     estimate = .pred, 
     alpha = 1 / 4)
-
-NET_Final_res |> collect_metrics()
+net_res <- NET_Final_res |> collect_metrics()|> filter(.metric %in% c('rmse','rsq'))
 ```
 
+# KERAS
+```{r}
 
 
+library(keras)
 
+model <- keras_model_sequential() 
+
+X_train <- as.matrix(juice(prep(car_recipe))[,-9])
+Y_train <- as.matrix(juice(prep(car_recipe))[,9])
+X_test <- as.matrix(bake(prep(car_recipe),new_data = car_test)[,-9])
+Y_test <- as.matrix(bake(prep(car_recipe),new_data = car_test)[,9])
+
+root_mean_squared_error <- function(y_true, y_pred){
+        sqrt(mean((y_true-y_pred)^2))
+}
+
+
+n_units = 512
+
+small_model <- keras_model_sequential() %>%
+  # `input_shape` is only required here so that `.summary` works.
+  layer_dense(16, activation = 'elu', input_shape = dim(X_train)[2]) %>%
+  layer_dense(16, activation = 'elu') %>%
+  layer_dense(1) %>% compile(
+  loss = root_mean_squared_error,
+  optimizer = keras$optimizers$legacy$Adam(.001)
+)
+
+
+size_histories <- list()
+test_results <- list()
+test_results[['small_model']] <- small_model %>% evaluate(
+  X_test,
+  Y_test,
+  verbose = 1
+)
+
+test_predictions <- predict(small_model, X_test)
+ggplot(data.frame(pred = as.numeric(X_test), mpg = c(Y_test))) +
+  geom_point(aes(x = pred, y = mpg)) +
+  geom_abline(intercept = 0, slope = 1, color = "blue")
+
+size_histories[['Small']] <- small_model %>% fit(
+  X_train,Y_train,
+  validation_split = 0.2,
+  verbose = 1,
+  epochs = 150
+)
+
+  model %>% 
+  layer_dense(units = n_units, 
+              activation = 'elu', 
+              input_shape = dim(X_train)[2],
+              kernel_regularizer = regularizer_l2(0.001)) %>% 
+  layer_dropout(rate = 0.5) %>% 
+  layer_dense(units = n_units, activation = 'elu',
+              kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = n_units, activation = 'elu',
+              kernel_regularizer = regularizer_l2(0.001)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = n_units, activation = 'elu',
+              kernel_regularizer = regularizer_l2(0.001)) |> 
+  layer_dropout(.5) |> 
+  layer_dense(1)
+
+ model %>% compile(
+  loss =root_mean_squared_error,
+  optimizer = keras$optimizers$legacy$Adam(.001)
+)
+
+history <- model %>% fit(
+  X_train,Y_train,
+  validation_split = 0.2,
+  verbose = 1,
+  epochs = 5,
+  steps_per_epoch = 2000
+)
+plot(history)
+
+test_results[['big_model']] <- model %>% evaluate(
+  X_test,
+  Y_test,
+  verbose = 1
+)
+
+test_predictions <- predict(model, X_test)
+ggplot(data.frame(pred = as.numeric(test_predictions), USD = c(car_test$usd))) +
+  geom_point(aes(x = pred, y = USD)) +
+  geom_abline(intercept = 0, slope = 1, color = "blue")
+
+sqrt(mean((car_test$usd-test_predictions)^2))
+```
 
 # DALEXtra
 
@@ -608,9 +1268,13 @@ final_model <- extract_workflow(final_res)
 
 model_explainer <- explain_tidymodels(final_model, data = select(car_train,-usd), y = car_train$usd)
 model_parts <- model_parts(model_explainer)
-plot(model_parts,max_vars= 10)
+
+variable_importance_plot <- plot(model_parts,max_vars= 10)+
+  labs(title = "LightGBM Feature Importance", subtitle = "Top 10 Features")+
+  theme(strip.text.x=element_blank())
 
 resids_gbm <- model_performance(model_explainer)
+
 plot(resids_gbm)
 model_profile <- model_profile(model_explainer, type = "accumulated")
 plot(model_profile, variables = "mileage")

@@ -11,7 +11,7 @@ date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
   bookdown::pdf_document2:
     keep_tex: true
-abstract: "This research paper investigates the application of machine learning models to predict used car prices in the dynamic context of the Pakistani market, with a primary focus on everyday vehicles. The data preprocessing phase involved comprehensive steps to enhance the dataset's quality, addressing issues such as collinearity, categorical encoding, and feature normalization. The modeling section employed a diverse set of algorithms, including GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, each contributing unique strengths to the predictive framework. The models were tuned using grid search methodology, and for gradient boosted models (LightGBM and XGBoost), racing with ANOVA tables added an extra layer of refinement. The results section provides an in-depth analysis of each model's performance, offering insights into their strengths and limitations in predicting used car prices in the Pakistani market. This study contributes valuable knowledge to the intersection of machine learning and automotive commerce, offering a nuanced understanding of factors influencing pricing dynamics in the diverse landscape of Pakistani used car sales."
+abstract: "This research paper investigates the application of machine learning models to predict used car prices in the dynamic context of the Pakistani market, with a primary focus on everyday vehicles. The data preprocessing phase involved comprehensive steps to enhance the dataset's quality, addressing issues such as collinearity, categorical encoding, and feature normalization. The modeling section employed a diverse set of algorithms, including GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, each contributing unique strengths to the predictive framework. The models were tuned using grid search methodology, and for gradient boosted models (LightGBM and XGBoost), racing with ANOVA tables. The results section provides an in-depth analysis of each model's performance, offering insights into their strengths and limitations in predicting used car prices in the Pakistani market. This study contributes valuable knowledge to the intersection of machine learning and automotive commerce, offering a nuanced understanding of factors influencing pricing dynamics in the diverse landscape of Pakistani used car sales."
 geometry: margin=1in
 toc: false
 ---
@@ -29,9 +29,10 @@ library(finetune)
 library(plotly)
 theme_set(theme_bw())
 knitr::opts_chunk$set(fig.height = 4,fig.width = 10)
+options(digits=2)
 ```
 
-```{r, cache=TRUE}
+```{r}
 load('Filtered_Out_Luxury_Models.RData')
 ```
 
@@ -76,7 +77,7 @@ $\hspace{20pt}$Each model, namely GLMNET, MLP, KNN, Decision Trees using CART, L
 
 ## GLMNET
 
-$\hspace{20pt}$Results of the GLMNET model were inherently mixed as we knew the relationship between `usd` and the predictors was most likely nonlinear. However, the model was not able to capture some of the nuances of the data, as evidenced by the relatively high RMSE and low R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:GLMNet-Predictions). The model predictions were relatively inaccurate with a training RMSE of `r show_best(car_results,metric='rmse',n=1)[,5]` and standard error of `r show_best(car_results,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:GLMNet-train). GLMNET testing results were marginally better with an RMSE of `r linear_res[1,3]` and a R-Squared of `r linear_res[2,3]` displayed in Table \@ref(tab:GLMNet-test).
+$\hspace{20pt}$Results of the GLMNET model were inherently mixed as we knew the relationship between `usd` and the predictors was most likely nonlinear. However, the model was not able to capture some of the nuances of the data, as evidenced by the relatively high RMSE and low R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:GLMNet-Predictions). The model predictions were relatively inaccurate with a training RMSE of `r show_best(car_results,metric='rmse',n=1)[,5] |> pull(mean)` and standard error of `r show_best(car_results,metric='rmse',n=1)[,7] |> pull(std_err)` displayed in Table \@ref(tab:GLMNet-train). GLMNET testing results were marginally better with an RMSE of `r linear_res[1,3] |> pull(.estimate)` and a R-Squared of `r linear_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:GLMNet-test).
 
 ```{r GLMNet-train}
 kableExtra::kbl(show_best(car_results,metric='rmse',n=1) |> 
@@ -118,7 +119,7 @@ $\hspace{20pt}$The testing results were also promising, with the model performin
 
 ## MLP
 
-$\hspace{20pt}$The results of the MLP trained with the BRLUEE engine were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:MLP-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(NET_Race_res,metric='rmse',n=1)[,5]` and standard error of `r show_best(NET_Race_res,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:MLP-train). MLP testing results were marginally better with an RMSE of `r net_res[2,3]` and a R-Squared of `r net_res[2,3]` displayed in Table \@ref(tab:MLP-test).
+$\hspace{20pt}$The results of the MLP trained with the BRLUEE engine were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:MLP-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(NET_Race_res,metric='rmse',n=1)[,7] |> pull(mean)` and standard error of `r show_best(NET_Race_res,metric='rmse',n=1)[,9] |> pull(std_err)` displayed in Table \@ref(tab:MLP-train). MLP testing results were marginally better with an RMSE of `r net_res[1,3] |> pull(.estimate)` and a R-Squared of `r net_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:MLP-test).
 
 ```{r MLP-train}
 kableExtra::kbl(show_best(NET_Race_res,metric='rmse',n=1) |> 
@@ -160,7 +161,7 @@ gridExtra::grid.arrange(p1,p2,ncol=2)
 
 ## KNN
 
-$\hspace{20pt}$The results of the KNN model were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:KNN-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,5]` and standard error of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:KNN-train). KNN testing results were marginally better with an RMSE of `r knn_res[1,3]` and a R-Squared of `r knn_res[2,3]` displayed in Table \@ref(tab:KNN-test). The KNN model was a great leap forward in performance compared to the previous two models in Section \@ref(glmnet) and Section \@ref(mlp).
+$\hspace{20pt}$The results of the KNN model were promising, as evidenced by the relatively low RMSE and high R-squared values. The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:KNN-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,6] |> pull(mean)` and standard error of `r show_best(KNN_Work_Spec,metric='rmse',n=1)[,8] |> pull(std_err)` displayed in Table \@ref(tab:KNN-train). KNN testing results were marginally better with an RMSE of `r knn_res[1,3] |> pull(.estimate)` and a R-Squared of `r knn_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:KNN-test). The KNN model was a great leap forward in performance compared to the previous two models in Section \@ref(glmnet) and Section \@ref(mlp).
 
 ```{r KNN-train}
 
@@ -195,14 +196,13 @@ p2 <- final_KNN_res %>%
     alpha = 1 / 4) +
   labs(title = "KNN Model Test Predictions")
 gridExtra::grid.arrange(p1,p2,ncol=2)
-
 ```
 
 \newpage
 
 ## Decision Trees using CART
 
-$\hspace{20pt}$Results from the CART model were marginally worse than the KNN as described in Section \@ref(knn), as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(mlp) and \@ref(glmnet). The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:DT-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,5]` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:DT-train). CART Decision Tree testing results were marginally better with an RMSE of `r `dt_res[1,3]` and a R-Squared of `r `dt_res[2,3]` displayed in Table \@ref(tab:DT-test). 
+$\hspace{20pt}$Results from the CART model were marginally worse than the KNN as described in Section \@ref(knn), as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(mlp) and \@ref(glmnet). The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:DT-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,6] |> pull(mean)` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,8] |> pull(std_err)` displayed in Table \@ref(tab:DT-train). CART Decision Tree testing results were marginally better with an RMSE of `r dt_res[1,3] |> pull(.estimate)` and a R-Squared of `r dt_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:DT-test). 
 
 ```{r DT-train}
 kableExtra::kbl(show_best(DT_Train,metric='rmse',n=1) |> 
@@ -242,7 +242,7 @@ gridExtra::grid.arrange(p1,p2,ncol=2)
 
 ## LightGBM
 
-$\hspace{20pt}$LightGBM results were the second best of all models tested, as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(knn), \@ref(glmnet), and \@ref(decision trees using cart). The gradient boosted model performance was also similar in both the training and testing sets indicative of good generalization of predictions. The model predictions between both training and testing are displayed in Figure \@ref(fig:lgbm-Predictions). The model predictions were highly accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,5]` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:lgbm-train). LightGBM testing results were slightly better with an RMSE of `r `lgbm_tab_res[1,3]` and a R-Squared of `r `lgbm_tab_res[2,3]` displayed in Table \@ref(tab:lgbm-test). This model was ultimately chosen as the best model out of all the models tested due to the use of the one standard deviation rule to select the best model, which is a more conservative approach to model selection. This model had high performance and was not overfitting the car sales data.
+$\hspace{20pt}$LightGBM results were the second best of all models tested, as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(knn), \@ref(glmnet), and \@ref(decision trees using cart). The gradient boosted model performance was also similar in both the training and testing sets indicative of good generalization of predictions. The model predictions between both training and testing are displayed in Figure \@ref(fig:lgbm-Predictions). The model predictions were highly accurate with a training RMSE of `r show_best(lgbm_race_res,metric='rmse',n=1)[,6] |> pull(mean)` and standard error of `r show_best(lgbm_race_res,metric='rmse',n=1)[,8] |> pull(std_err)` displayed in Table \@ref(tab:lgbm-train). LightGBM testing results were slightly better with an RMSE of `r lgbm_tab_res[1,3] |> pull(.estimate)` and a R-Squared of `r lgbm_tab_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:lgbm-test). This model was ultimately chosen as the best model out of all the models tested due to the use of the one standard deviation rule to select the best model, which is a more conservative approach to model selection. This model had high performance and was not overfitting the car sales data. Variable importances within the LightGBM model are displayed Figure \@ref(fig:lgbm-plot).
 
 ```{r lgbm-train}
 kableExtra::kbl(show_best(lgbm_race_res,metric='rmse',n=1) |> 
@@ -278,11 +278,15 @@ p2 <- final_res %>%
 gridExtra::grid.arrange(p1,p2,ncol=2)
 ```
 
+```{r lgbm-plot, fig.cap= "Variable Importance Plot for Light GBM Model"}
+variable_importance_plot
+```
+
 \newpage
 
 ## XGBoost
 
-$\hspace{20pt}$XGBoost was the best performing model in terms of RMSE and R-squared of all fitted models. The model's performance was also consistent across the training and testing sets, indicating that it was generalizing the predictions across the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:xgb-predictions). The model predictions were extremely accurate with a training RMSE of `r show_best(xgb_rs,metric='rmse',n=1)[,5]` and standard error of `r show_best(xgb_rs,metric='rmse',n=1)[,7]` displayed in Table \@ref(tab:xgb-train). XGBoost testing results were similar with an RMSE of `r xgb_tab_res[1,3]` and a R-Squared of `r xgb_tab_res[2,3]` displayed in Table \@ref(tab:xgb-test). 
+$\hspace{20pt}$XGBoost was the best performing model in terms of RMSE and R-squared of all fitted models. The model's performance was also consistent across the training and testing sets, indicating that it was generalizing the predictions across the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:xgb-Predictions). The model predictions were extremely accurate with a training RMSE of `r show_best(xgb_rs,metric='rmse',n=1)[,10] |> pull(mean)` and standard error of `r show_best(xgb_rs,metric='rmse',n=1)[,12] |> pull(std_err)` displayed in Table \@ref(tab:xgb-train). XGBoost testing results were similar with an RMSE of `r xgb_tab_res[1,3] |> pull(.estimate)` and a R-Squared of `r xgb_tab_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:xgb-test). 
 
 ```{r xgb-train}
 kableExtra::kbl(show_best(xgb_rs,metric='rmse',n=1) |> 
@@ -316,9 +320,9 @@ p2 <- final_res_xgb %>%
     alpha = 1 / 4) +
   labs(title = "XGBoost Model Test Predictions")
 gridExtra::grid.arrange(p1,p2,ncol=2)
-
 ```
-The XGBoost model still had some pretty big missed predictions, which are displayed in Figure \@ref(fig:xgb-predictions). The model missed predictions were mostly for cars that were priced higher than 10,000 USD. The model was not able to predict these car accurately due to the sparse data of these types of cars in the testing set.
+
+The XGBoost model still had some pretty big missed predictions, which are displayed in Figure \@ref(fig:xgb-Predictions). The model missed predictions were mostly for cars that were priced higher than 10,000 USD. The model was not able to predict these car accurately due to the sparse data of these types of cars in the testing set.
 
 
 \newpage
@@ -329,13 +333,18 @@ $\hspace{20pt}$The model performance of all models tested is displayed in Figure
 
 ```{r Model-Performance, fig.cap="Model Performance"}
 Model_Performance <- data.frame(ModelNames = c("GLMNET","MLP","KNN","Decision Tree","Light GBM","XGBoost"),
-                                TrainError = c(show_best(car_results,metric='rmse',n=1)[,5],
-                                               show_best(NET_Race_res,metric='rmse',n=1)[,5],
-                                               show_best(KNN_Work_Spec,metric='rmse',n=1)[,5],
-                                               show_best(DT_Train,metric='rmse',n=1)[,5],
-                                               show_best(xgb_rs,metric='rmse',n=1)[,5],
-                                               show_best(lgbm_race_res,metric='rmse',n=1)[,5]),
-                                TestError = c(6282.8891859,5606.3147042,3145.1372420,3364.4609826,2842.0316563,2740.960997))
+                                TrainError = c(show_best(car_results,metric='rmse',n=1)[,5] |> pull(mean),
+                                               show_best(NET_Race_res,metric='rmse',n=1)[,7] |> pull(mean),
+                                               show_best(KNN_Work_Spec,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(DT_Train,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(lgbm_race_res,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(xgb_rs,metric='rmse',n=1)[,10] |> pull(mean)),
+                                TestError = c(linear_res[1,3] |> pull(.estimate),
+                                              net_res[1,3] |> pull(.estimate),
+                                              knn_res[1,3] |> pull(.estimate),
+                                              dt_res[1,3] |> pull(.estimate),
+                                              lgbm_tab_res[1,3] |> pull(.estimate),
+                                              xgb_tab_res[1,3] |> pull(.estimate)))
 
 Model_Performance <- Model_Performance %>%
   pivot_longer(cols = c(TrainError,TestError), names_to = "ErrorType", values_to = "values")
@@ -346,7 +355,7 @@ ggplot(data = Model_Performance,
        aes(x = fct_reorder(ModelNames,values,.desc=T), y = values,
            color = ErrorType, shape = ErrorType ,label = round(values, 0))) +
   geom_point(size = 10) +
-  scale_shape_manual(name = "Error Type", labels = c("Train Error","Test Error"), values=c(16,17))+
+  scale_shape_manual(name = "Error Type", labels = c("Test Error","Train Error"), values=c(16,17))+
   geom_text_repel(color = "black", size = 3) +
   coord_flip() +
   scale_y_continuous(labels=scales::dollar)+
@@ -354,7 +363,7 @@ ggplot(data = Model_Performance,
        x = "Model",y="RMSE") +
   theme_bw() + 
   scale_colour_manual(name = "Error Type",
-                      labels = c("Train Error","Test Error"),
+                      labels = c("Test Error","Train Error"),
                       values = c("#F8766D","#619CFF"))
 ```
 
@@ -399,15 +408,48 @@ $\hspace{20pt}$In summary, our comprehensive model evaluation provides a perspec
 ## Appendix B: Model Performance Metrics
 
 ```{r}
-all_model_training_Rmse <- c(7051.5063,6235.1162090,3146.8545379,3343.7587802,2946.1450871,2842.2375825)
-all_model_training_std_err <- c(191.7094765,203.3696426,146.2410052,260.5655685,230.5682199,180.531215)
 
+all_model_training_std_err <- c(show_best(car_results,metric='rmse',n=1)[,7] |> pull(std_err),
+                                               show_best(NET_Race_res,metric='rmse',n=1)[,9] |> pull(std_err),
+                                               show_best(KNN_Work_Spec,metric='rmse',n=1)[,8] |> pull(std_err),
+                                               show_best(DT_Train,metric='rmse',n=1)[,8] |> pull(std_err),
+                                               show_best(lgbm_race_res,metric='rmse',n=1)[,8] |> pull(std_err),
+                                               show_best(xgb_rs,metric='rmse',n=1)[,12] |> pull(std_err))
 
-all_model_training_Rsq <- c(0.8005,0.8436827,0.9600549,0.9544921,0.9645135,0.9672529)
-all_model_training_rsq_error <- c(0.0114633,0.0119983,0.0036643,0.0069266,0.0053957,0.003974)
+all_model_training_Rmse <-  c(show_best(car_results,metric='rmse',n=1)[,5] |> pull(mean),
+                                               show_best(NET_Race_res,metric='rmse',n=1)[,7] |> pull(mean),
+                                               show_best(KNN_Work_Spec,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(DT_Train,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(lgbm_race_res,metric='rmse',n=1)[,6] |> pull(mean),
+                                               show_best(xgb_rs,metric='rmse',n=1)[,10] |> pull(mean))
 
-all_model_testing_Rmse <- c(6282.8891859,5606.3147042,3145.1372420,3364.4609826,2842.0316563,2740.960997)
-all_model_test_rqs <- c(0.8107064,0.8492034,0.9522852,0.9472024,0.9614465,0.964083)
+all_model_training_Rsq <- c(show_best(car_results,metric='rsq',n=1)[,5] |> pull(mean),
+                                               show_best(NET_Race_res,metric='rsq',n=1)[,7] |> pull(mean),
+                                               show_best(KNN_Work_Spec,metric='rsq',n=1)[,6] |> pull(mean),
+                                               show_best(DT_Train,metric='rsq',n=1)[,6] |> pull(mean),
+                                               show_best(lgbm_race_res,metric='rsq',n=1)[,6] |> pull(mean),
+                                               show_best(xgb_rs,metric='rsq',n=1)[,10] |> pull(mean))
+
+all_model_training_rsq_error <- c(show_best(car_results,metric='rsq',n=1)[,7] |> pull(std_err),
+                                               show_best(NET_Race_res,metric='rsq',n=1)[,9] |> pull(std_err),
+                                               show_best(KNN_Work_Spec,metric='rsq',n=1)[,8] |> pull(std_err),
+                                               show_best(DT_Train,metric='rsq',n=1)[,8] |> pull(std_err),
+                                               show_best(lgbm_race_res,metric='rsq',n=1)[,8] |> pull(std_err),
+                                               show_best(xgb_rs,metric='rsq',n=1)[,12] |> pull(std_err))
+
+all_model_testing_Rmse <-  c(linear_res[1,3] |> pull(.estimate),
+                                              net_res[1,3] |> pull(.estimate),
+                                              knn_res[1,3] |> pull(.estimate),
+                                              dt_res[1,3] |> pull(.estimate),
+                                              lgbm_tab_res[1,3] |> pull(.estimate),
+                                              xgb_tab_res[1,3] |> pull(.estimate))
+
+all_model_test_rqs <- c(linear_res[2,3] |> pull(.estimate),
+                                              net_res[2,3] |> pull(.estimate),
+                                              knn_res[2,3] |> pull(.estimate),
+                                              dt_res[2,3] |> pull(.estimate),
+                                              lgbm_tab_res[2,3] |> pull(.estimate),
+                                              xgb_tab_res[2,3] |> pull(.estimate))
 
 all_model_performance <- data.frame(Model = c("GLMNET","MLP","KNN","Decision Tree","Light GBM","XGBoost"),
                                      `Training RMSE` = all_model_training_Rmse,
