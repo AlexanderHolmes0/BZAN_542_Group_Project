@@ -54,7 +54,7 @@ $\hspace{20pt}$The data used in this study was obtained from the Kaggle dataset 
 
 ## Preprocessing
 
-$\hspace{20pt}$The data preprocessing involved several steps to enhance the quality and relevance of the 'car_sales' dataset to machine learning algorithms. The creation of a binary 'luxury' variable classifies specific makes as either luxury or non-luxury. These cars were ultimately filtered out to focus solely on every day makes and models and not high-end luxury brands. Categorical variables, such as 'engine,' underwent conversion to factors for improved model compatibility. The registered column was transformed into binary values, distinguishing between registered and unregistered vehicles. A new 'usd' column was introduced, representing the price in USD to facilitate easier comparison. All vehicles with a USD value above \$80,000 were filtered out for our analysis. The rationale for this is due to some extreme outliers in the luxury car scene in Pakistan. The missing values in the 'assembly' column were handled by imputing any missing values with the value of `local`. This was a stipulation on the Kaggle data set. Additional filtering steps excluded records with specific identifiers and non-luxury cars, while also removing irrelevant columns such as `Addref` and City. The dataset underwent an additional filter to specifically focus on Ford cars, ensuring that F-150 Raptor pickup trucks were excluded from our analysis due to being extreme outliers in the Pakistani market. Lastly, any remaining incomplete rows were removed, resulting in a refined dataset ready for machine learning algorithms.
+$\hspace{20pt}$The data preprocessing involved several steps to enhance the quality and relevance of the 'car_sales' dataset to machine learning algorithms. The creation of a binary 'luxury' variable classifies specific makes as either luxury or non-luxury. These cars were ultimately filtered out to focus solely on every day makes and models and not high-end luxury brands. Categorical variables, such as 'engine,' underwent conversion to factors for improved model compatibility. The registered column was transformed into binary values, distinguishing between registered and unregistered vehicles. A new 'usd' column was introduced, representing the price in USD to facilitate easier comparison. All vehicles with a USD value above \$80,000 were filtered out for our analysis. The rationale for this is due to some extreme outliers in the luxury car scene in Pakistan. The missing values in the 'assembly' column were handled by imputing any missing values with the value of local. This was a stipulation on the Kaggle data set. Additional filtering steps excluded records with specific identifiers and non-luxury cars, while also removing irrelevant columns such as Addref and City. Some vehicles were outliers within this market that would not normally be in the USA. This problem was addressed by the price filter. Lastly, any remaining incomplete rows were removed, resulting in a refined dataset ready for machine learning algorithms.
 
 ## Testing Splits
 
@@ -83,7 +83,7 @@ $\hspace{20pt}$Each model, GLMNET, MLP, KNN, decision trees using CART, LightGBM
 
 ## GLMNET
 
-$\hspace{20pt}$Results of the GLMNET model were inherently mixed, as we knew the relationship between `USD` and the predictors was most likely nonlinear. The model was not able to capture some of the interactions within the data, as indicated by the high RMSE and low R-squared. The linear model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:GLMNet-Predictions). The model predictions were relatively inaccurate with a training RMSE of `r show_best(car_results,metric='rmse',n=1)[,5] |> pull(mean)` and standard error of `r show_best(car_results,metric='rmse',n=1)[,7] |> pull(std_err)` displayed in Table \@ref(tab:GLMNet-train). GLMNET testing results were marginally worse with an RMSE of `r linear_res[1,3] |> pull(.estimate)` and an R-Squared of `r linear_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:GLMNet-test).
+$\hspace{20pt}$Results of the GLMNET model were inherently mixed, as we knew the relationship between USD and the predictors was most likely nonlinear. The model was not able to capture some of the interactions within the data, as indicated by the high RMSE and low R-squared. The linear model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:GLMNet-Predictions). The model predictions were relatively inaccurate with a training RMSE of `r show_best(car_results,metric='rmse',n=1)[,5] |> pull(mean)` and standard error of `r show_best(car_results,metric='rmse',n=1)[,7] |> pull(std_err)` displayed in Table \@ref(tab:GLMNet-train). GLMNET testing results were marginally worse with an RMSE of `r linear_res[1,3] |> pull(.estimate)` and an R-Squared of `r linear_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:GLMNet-test).
 
 ```{r GLMNet-train}
 kableExtra::kbl(show_best(car_results,metric='rmse',n=1) |> 
@@ -213,13 +213,13 @@ $\hspace{20pt}$Results from the CART model were marginally worse than the KNN mo
 ```{r DT-train}
 kableExtra::kbl(show_best(DT_Train,metric='rmse',n=1) |> 
 bind_rows(show_best(DT_Train,metric="rsq",n=1)) |> 
-  select(.metric,mean,std_err),caption = "De Training Results",booktabs = T) |> 
+  select(.metric,mean,std_err),caption = "Decision Tree Training Results",booktabs = T) |> 
   kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
 ```
 
 ```{r DT-test}
 kableExtra::kbl(final_DT_res |> collect_metrics() |> filter(.metric %in% c('rmse','rsq')) |> 
-  select(.metric,.estimate),caption = "NNET Test Results", booktabs = T)|> 
+  select(.metric,.estimate),caption = "Decision Tree Test Results", booktabs = T)|> 
   kableExtra::kable_styling(latex_options = c("striped", "hold_position"),full_width = F)
 ```
 
@@ -383,7 +383,7 @@ $\hspace{20pt}$Other models like GLMNET and MLP were less effective in this cont
 
 $\hspace{20pt}$It's important to note that our models' predictive accuracy depends on the specific data used. The performance may vary with different datasets or when including features not in our study, such as accident history or recalls. These limitations are detailed in Appendix C.
 
-$\hspace{20pt}$Our research has practical implications for both car dealers and buyers in Pakistan. Dealers can use our models as a reference for pricing cars, but should be aware of the errors in each model. Despite efforts to minimize these errors, they still exist, with our best model, LightGBM, showing an average error of around $2000. For buyers, the models can help assess if a car's price is reasonable. Similar to tools like CarFax in the United States and Canada, which evaluate car pricing based on features, our models could be beneficial in markets without such tools, particularly Pakistan. 
+$\hspace{20pt}$Our research has practical implications for both car dealers and buyers in Pakistan. Dealers can use our models as a reference for pricing cars, but should be aware of the errors in each model. Despite efforts to minimize these errors, they still exist, with our best model, LightGBM, showing an average error of around $1,735 (testing error \$1,636). For buyers, the models can help assess if a car's price is reasonable. Similar to tools like CarFax in the United States and Canada, which evaluate car pricing based on features, our models could be beneficial in markets without such tools, particularly Pakistan. 
 
 $\hspace{20pt}$We aim for transparency in our model and advise users to exercise vigilance when using our models. Our models do not include data on prior accidents, repairs, maintenance history, or minor damages like interior wear, scratches, or rust. They also do not consider the color or type of interior. While the models are a useful tool, users should be cautious and consider these limitations when making real-world decisions.
 
@@ -479,40 +479,47 @@ kableExtra::kbl(all_model_performance,caption = "Model Performance Metrics",book
 
 \newpage
 
-## Appendix C: Models Descriptions
+## Appendix C: Model Descriptions
 
-### Generalized Linear Model (GLM)
+### Elastic Net Regression (GLMNET)
 
-The glmnet algorithm is applied within a workflow, specifying key tuning parameters. A 5-fold cross-validation strategy evaluates performance metrics, and the best model is selected based on the one-standard-error rule for the mixture parameter and minimum RMSE. Predictions from the top-tuned glmnet model are visualized through a calibration plot.\
-+**Pros** Simple and interpret able. Can handle categorical variables well. Well-suited for linear relationships.\
--**Cons** Assumes linear relationships between predictors and response. Can be sensitive to outliers. Can be sensitive to multicollinearity.\
+The GLMNET algorithm is used with specified tuning parameters, evaluated using a 5-fold cross-validation approach. The best model is chosen based on the one-standard-error rule for the mixture parameter and the minimum RMSE. Predictions from the optimally tuned GLMNET model are presented in a calibration plot. \
+**Pros:** Simple and interpretable, handles categorical variables effectively, and is suitable for linear relationships. \
+**Cons:** Assumes linear relationships between predictors and response, sensitive to outliers, and susceptible to multicollinearity.\
 
-### Light GBM
 
-Light GBM, configured using boost_tree, operates within a workflow with tuning parameters. A 5-fold cross-validation strategy assesses performance metrics, and the best model is chosen based on minimum rmse and highest rsq. Predictions from the top-tuned Light GBM model are visualized through a calibration plot and an autoplot depicting the relationship between trees and rmse.\
-+**Pros** High-performance gradient boosting. Efficient for large datasets. Handles categorical features naturally.\
--**Cons** Can be sensitive to outliers. Can be sensitive to multicollinearity.\
+### LightGBM
+
+LightGBM, set up with boost_tree, uses tuning parameters in a workflow. We use 5-fold cross-validation to evaluate performance, selecting the best model based on the lowest RMSE and highest R-squared. The predictions of the optimally tuned LightGBM model are displayed in a calibration plot. \
+**Pros:** Efficient gradient boosting with high performance, suitable for large datasets, and effectively handles categorical features.\
+**Cons:** Sensitive to outliers and multicollinearity.\
+
 
 ### XGBoost
 
-XGBoost is specified with tuning parameters within a workflow. A Latin Hypercube sampling grid explores hyperparameter combinations. The racing process systematically explores configurations, and the final XGBoost model, trained with optimal parameters, is evaluated using last_fit. A calibration plot visualizes the final model's performance.\
-+**Pros** Handles missing data well. Regularization options to control overfitting. Feature importance analysis.\
--**Cons** Requires careful tuning of hyperparameters. Computationally intensive. Black-box nature limits interpret ability. Sensitive to outliers. Potential for overfitting with complex models.\
+XGBoost is set up with tuning parameters. We use Latin Hypercube sampling to test different hyperparameter combinations. The best configuration is identified through a racing process, and the final model, optimized with these parameters, is assessed using the testing set.\
+**Pros:** Effective with missing data, offers regularization to prevent overfitting, and allows feature importance analysis. \
+**Cons:** Needs precise hyperparameter tuning, computationally demanding, less interpretable due to its black-box nature, sensitive to outliers, and can overfit with complex models.\
 
-### K Nearest Neighbors (KNN)
 
-The KNN model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned KNN model are visualized in a calibration plot. The final KNN model, trained with optimal hyper-parameters, is evaluated on the entire data set.\
-+**Pros** No assumption about data distribution. Robust to noisy data. Simple and easy to understand.\
--**Cons** Computationally intensive for large datasets. Sensitivity to irrelevant features. Dependency on the choice of distance metric.\
+
+### K-Nearest Neighbors (KNN)
+
+The KNN model is set up with specific tuning parameters. We select the best model based on the lowest RMSE, identified through a racing process. The top-tuned KNN model's predictions are displayed in a calibration plot. The final model, optimized with the best hyper-parameters, is tested on the testing dataset.\
+**Pros:** It doesn't assume a specific data distribution, handles noisy data well, and is straightforward.\
+**Cons:** Requires significant computation for large datasets, sensitive to irrelevant features, and dependent on the distance metric used. Features must also be normalized.\
+
 
 ### Decision Tree
 
-The Decision Tree model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned Decision Tree model are visualized in a calibration plot. The final Decision Tree model, trained with optimal hyper-parameters, is evaluated on the entire data set.\
-+**Pros** Non-linear relationships captured well. Interpret able decision rules. Robust to outliers.\
--**Cons** Prone to over-fitting. Lack of smoothness in decision boundaries. Sensitive to small variations in data.\
+The Decision Tree model is tuned with specific parameters and evaluated through a racing process to select the model with the lowest RMSE. This final model, optimized with the best hyperparameters, is tested on the holdout dataset. \
+Pros: Effectively captures non-linear relationships, provides clear decision rules, and is robust to outliers. \
+**Cons:** Can overfit easily, produces non-smooth decision boundaries, and is sensitive to minor data changes.\
 
-### Multi-layer-Perceptron/Neural Network
 
-The Neural Network model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned Neural Network model are visualized in a calibration plot. The final Neural Network model is evaluated on a testing data set, with a scatter plot visualizing predicted versus true values.\
-+**Pros** Captures complex non-linear patterns. Suitable for image and text data. Can learn hierarchical features.\
--**Cons** Requires large amounts of data. Prone to over-fitting. Computationally intensive. Black-box nature makes interpretation challenging.
+### Multi-Layer-Perceptron (MLP)
+
+The MLP model, a neural network, is set up with tuning parameters and the best model is chosen based on the lowest RMSE, using a racing process. We visualize predictions from the best-tuned model in a calibration plot. The final model is assessed on a test dataset, with a scatter plot comparing predicted and actual values. \
+**Pros:** Identifies complex non-linear patterns, effective for image and text data, and learns hierarchical features. \
+**Cons:** Needs a lot of data, can overfit easily, demands high computational power, and is hard to interpret due to its black-box nature.\
+
