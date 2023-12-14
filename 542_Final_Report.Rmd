@@ -11,7 +11,7 @@ date: "`r format(Sys.time(), '%B %d, %Y')`"
 output: 
   bookdown::pdf_document2:
     keep_tex: true
-abstract: "This research paper investigates the application of machine learning models to predict used car prices in the dynamic context of the Pakistani market, with a primary focus on everyday vehicles. The data preprocessing phase involved comprehensive steps to enhance the dataset's quality, addressing issues such as collinearity, categorical encoding, and feature normalization. The modeling section employed a diverse set of algorithms, including GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, each contributing unique strengths to the predictive framework. The models were tuned using grid search methodology, and for gradient boosted models (LightGBM and XGBoost), racing with ANOVA tables. The results section provides an in-depth analysis of each model's performance, offering insights into their strengths and limitations in predicting used car prices in the Pakistani market. This study contributes valuable knowledge to the intersection of machine learning and automotive commerce, offering a nuanced understanding of factors influencing pricing dynamics in the diverse landscape of Pakistani used car sales."
+abstract: "This research paper investigates the application of machine learning models to predict used car prices in the dynamic context of the Pakistani market, with a primary focus on everyday vehicles. The data preprocessing phase involved comprehensive steps to enhance the dataset's quality, addressing issues such as collinearity, categorical encoding, and feature normalization. The modeling section employed a diverse set of algorithms, including GLMNET, MLP, KNN, Decision Trees using CART, LightGBM, and XGBoost, each contributing unique strengths to the predictive framework. The models were tuned using grid search methodology, and for gradient boosted models (LightGBM and XGBoost), racing with ANOVA tables. XGBoost came in as our highest performing model, with the lowest RMSE of 2842.24. The results section provides an in-depth analysis of each model's performance, offering insights into their strengths and limitations in predicting used car prices in the Pakistani market. This study contributes valuable knowledge to the intersection of machine learning and automotive commerce, offering a nuanced understanding of factors influencing pricing dynamics in the diverse landscape of Pakistani used car sales."
 geometry: margin=1in
 toc: false
 ---
@@ -36,12 +36,13 @@ options(digits=2)
 load('Filtered_Out_Luxury_Models.RData')
 ```
 
-
 # Introduction
 
 $\hspace{20pt}$This paper presents an application of machine learning for the prediction of used car prices in Pakistan's used car market, with a specific focus on the more commonplace vehicles that are the majority of transactions. While existing valuation methods frequently fall short, especially for everyday vehicles, our primary goal is to untangle the complexities surrounding price determinations. We want to demystify the valuation process by providing a dependable framework that clarifies the process for both buyers and sellers, resulting in a more transparent and trustworthy marketplace. We aim to address the unique challenges posed by the diverse array of vehicles in the Pakistani used car market by employing sophisticated machine learning algorithms and offering an innovative pricing approach that caters to the dynamics of Pakistani car sales.
 
-$\hspace{20pt}$This study recognizes the imbalances in car pricing between buyers and sellers, especially when it comes to non-luxury vehicle appraisal. Our study attempts to deliver accurate and useful insights to help dealers and consumers navigate the intricate web of factors that affect car prices, such as make, model, mileage, and condition. We contribute to a conversation about leveraging machine learning to enhance transparency in the used car market by exploring the complexities of car pricing specifically for common place used car. This paper not only demonstrates the potential of machine learning to reduce valuation disparities, but it also envisions a future in Pakistan with a more informed and equitable pre-owned car market, benefiting all parties involved in the complex dance of buying and selling everyday automobiles.
+$\hspace{20pt}$This study recognizes the imbalances in car pricing between buyers and sellers, especially when it comes to non-luxury vehicle appraisal. Our study attempts to deliver accurate and useful insights to help dealers and consumers navigate the intricate web of factors that affect car prices, such as make, model, mileage, and condition. We contribute to a conversation about leveraging machine learning to enhance transparency in the used car market by exploring the complexities of car pricing specifically for common place used car. With our project the goal was not to create a price predictor, but an aide for buyers, or sellers, to utilize and leverage when negotiating the price of the vehicle they would like to purchase.This allows for a buyer to feel peace knowing they paid a fair price for their "new" vehicle, while also allowing salesmen to know that they were not only fair, but were able to get the most out of a fair range for the vehicle they sold.
+
+$\hspace{20pt}$This paper not only demonstrates the potential of machine learning to reduce valuation disparities, but it also envisions a future in Pakistan with a more informed and equitable pre-owned car market, benefiting all parties involved in the complex dance of buying and selling everyday automobiles.
 
 \newpage
 
@@ -49,19 +50,23 @@ $\hspace{20pt}$This study recognizes the imbalances in car pricing between buyer
 
 ## Data
 
-$\hspace{20pt}$The data used in this study was obtained from the Kaggle dataset 'Pakistan Used Car Prices 2023' (https://www.kaggle.com/datasets/talhabarkaatahmad/pakistan-used-car-prices-2023). The dataset contains 77,878 records and 16 columns, including variables like: make, model, assembly, registered, year, mileage, and engine. The dataset was collected from the website PakWheels.com, a popular online marketplace for buying and selling cars in Pakistan. The data was scraped from the website using the Python library BeautifulSoup. The dataset was then cleaned and filtered to remove outliers and irrelevant data. The final dataset was then exported as a CSV file and uploaded to Kaggle for public use. The dataset contains a wide range of vehicles, including both luxury and non-luxury cars. Luxury cars were identified by the make and model variables, which were then filtered out to focus solely on everyday makes and models. The dataset contains a mix of categorical and numeric variables, with the price variable being the most important response variable.
+$\hspace{20pt}$The data used in this study was obtained from the Kaggle dataset 'Pakistan Used Car Prices 2023' (<https://www.kaggle.com/datasets/talhabarkaatahmad/pakistan-used-car-prices-2023>). The dataset contains 77,878 records and 16 columns, including variables like: make, model, assembly, registered, year, mileage, and engine. The dataset was collected from the website PakWheels.com, a popular online marketplace for buying and selling cars in Pakistan. The data was scraped from the website using the Python library BeautifulSoup. The dataset was then cleaned and filtered to remove outliers and irrelevant data. The final dataset was then exported as a CSV file and uploaded to Kaggle for public use. The dataset contains a wide range of vehicles, including both luxury and non-luxury cars. Luxury cars were identified by the make and model variables, which were then filtered out to focus solely on everyday makes and models. The dataset contains a mix of categorical and numeric variables, with the price variable being the most important response variable.
 
-$\hspace{20pt}$The data preprocessing in this study involved several crucial steps to enhance the quality and relevance of the 'car_sales' dataset. The creation of a binary 'luxury' variable classified specific car makes as either luxury or non-luxury. These cars were ultimately filtered out to focus solely on everyday makes and models and not high-end luxury brands. Categorical variables, such as 'engine,' underwent conversion to factors for improved model compatibility. The registered column was transformed into binary values, distinguishing between registered and unregistered vehicles. A new 'usd' column was introduced, representing the price in USD to facilitate standardized comparisons. To address missing values, the 'assembly' column was handled by substituting any gaps with local values. Subsequent filtering steps excluded records with specific identifiers and non-luxury cars, while also removing irrelevant columns such as Addref and City. The dataset underwent an additional filter to specifically focus on Ford cars, ensuring that F-150 Raptor pickup trucks were excluded from our analysis due to being extreme outliers. Lastly, any remaining incomplete rows were removed, resulting in a refined dataset ready for comprehensive analysis in the study on predicting Pakistani used car sales. 
+#### Preprocessing
+
+$\hspace{20pt}$The data preprocessing in this study involved several crucial steps to enhance the quality and relevance of the 'car_sales' dataset. The creation of a binary 'luxury' variable classified specific car makes as either luxury or non-luxury. These cars were ultimately filtered out to focus solely on everyday makes and models and not high-end luxury brands. Categorical variables, such as 'engine,' underwent conversion to factors for improved model compatibility. The registered column was transformed into binary values, distinguishing between registered and unregistered vehicles. A new 'usd' column was introduced, representing the price in USD to facilitate standardized comparisons. To address missing values, the 'assembly' column was handled by substituting any gaps with local values. Subsequent filtering steps excluded records with specific identifiers and non-luxury cars, while also removing irrelevant columns such as Addref and City. The dataset underwent an additional filter to specifically focus on Ford cars, ensuring that F-150 Raptor pickup trucks were excluded from our analysis due to being extreme outliers. Lastly, any remaining incomplete rows were removed, resulting in a refined dataset ready for comprehensive analysis in the study on predicting Pakistani used car sales.
+
+#### Testing Splits
 
 $\hspace{20pt}$The dataset prior to creating a training and testing split had an overall row count of 67,395. Once the data was split, the training set contained 46,795 records, and the testing set contained 15,600 records. Cross-validation was employed in this analysis, with five folds being utilized during the training of all models. An important aspect in the creation of the training and testing data was the use of stratification based on the usd of the vehicle to ensure that the training and testing data had similar distributions of usd values. This was done to ensure that the models were trained and tested with vehicles of similar usd values.
 
-## Preprocessing Recipe
+#### Preprocessing Recipe
 
 $\hspace{20pt}$A data preprocessing recipe was designed to prepare the training dataset for modeling the relationship between the response variable usd (used car price in USD) and all predictor variables. The recipe, implemented using the 'recipes' package in R, consists of several key steps. Initially, it removes the price and luxury predictors to eliminate correlated and unneeded features. The next step encodes categorical variables into linear functions using Bayesian likelihood encodings. This step excluded nominal predictors that had few levels: fuel, transmission, and assembly. One-hot encoding is then applied to all remaining nominal predictors, introducing binary dummy variables for categorical data. Zero-variance predictors are removed, and all predictors are normalized to ensure consistent scaling. Lastly, a correlation filter is applied, which removes highly correlated numeric predictors, mitigating multicollinearity issues. Overall, this comprehensive data preprocessing recipe aims to enhance the quality and suitability of the dataset for subsequent machine learning modeling, addressing issues such as collinearity, high-level categorical features, and feature normalization.
 
 ## Models
 
-$\hspace{20pt}$In the modeling phase of our study, we leverage a diverse set of powerful algorithms to predict used car prices in the dynamic landscape of the Pakistani market. Our possible modeling algorithms include GLMNET, MLP (Multilayer Perceptron), LightGBM, XGBoost, KNN (K-Nearest Neighbors), and decision trees utilizing the CART (Classification and Regression Trees) methodology. Each model brings its own unique strengths to the table, addressing different facets of the complex relationship between predictor variables and the target variable, usd (used car price in USD). GLMNET, an elastic net regularized linear regression model, allows us to navigate through potential sparse and correlated predictors. MLP, a neural network architecture, captures intricate nonlinear relationships within the data. LightGBM and XGBoost, gradient-boosting frameworks, excel at handling large datasets and complex interactions. KNN, a proximity-based algorithm, provides insights into the impact of similar cars on pricing. Finally, decision trees using CART afford interpretability and uncover nonlinear decision boundaries. By employing this diverse ensemble, we aim to comprehensively explore and compare the predictive capabilities of these models, ultimately enhancing our understanding of the nuanced factors influencing used car prices in Pakistan.
+$\hspace{20pt}$In the modeling phase of our study, we leverage a diverse set of powerful algorithms to predict used car prices in the dynamic landscape of the Pakistani market. Our possible modeling algorithms include GLMNET, MLP (Multilayer Perceptron), LightGBM, XGBoost, KNN (K-Nearest Neighbors), and decision trees utilizing the CART (Classification and Regression Trees) methodology. Each model brings its own unique strengths to the table, addressing different facets of the complex relationship between predictor variables and the target variable, usd (used car price in USD). GLMNET, an elastic net regularized linear regression model, allows us to navigate through potential sparse and correlated predictors. MLP, a neural network architecture, captures intricate nonlinear relationships within the data. LightGBM and XGBoost, gradient-boosting frameworks, excel at handling large datasets and complex interactions. KNN, a proximity-based algorithm, provides insights into the impact of similar cars on pricing. Finally, decision trees using CART afford interpretability and uncover nonlinear decision boundaries. By employing this diverse ensemble, we aim to comprehensively explore and compare the predictive capabilities of these models, ultimately enhancing our understanding of the nuanced factors influencing used car prices in Pakistan. See appendix c for more information regarding model selection and decisions.
 
 ## Model Tuning
 
@@ -202,7 +207,7 @@ gridExtra::grid.arrange(p1,p2,ncol=2)
 
 ## Decision Trees using CART
 
-$\hspace{20pt}$Results from the CART model were marginally worse than the KNN as described in Section \@ref(knn), as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(mlp) and \@ref(glmnet). The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:DT-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,6] |> pull(mean)` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,8] |> pull(std_err)` displayed in Table \@ref(tab:DT-train). CART Decision Tree testing results were marginally better with an RMSE of `r dt_res[1,3] |> pull(.estimate)` and a R-Squared of `r dt_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:DT-test). 
+$\hspace{20pt}$Results from the CART model were marginally worse than the KNN as described in Section \@ref(knn), as evidenced by the relatively low RMSE and high R-squared values compared to models in Sections \@ref(mlp) and \@ref(glmnet). The model's performance was also consistent across the training and testing sets, indicating that it was not overfitting the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:DT-Predictions). The model predictions were relatively accurate with a training RMSE of `r show_best(DT_Train,metric='rmse',n=1)[,6] |> pull(mean)` and standard error of `r show_best(DT_Train,metric='rmse',n=1)[,8] |> pull(std_err)` displayed in Table \@ref(tab:DT-train). CART Decision Tree testing results were marginally better with an RMSE of `r dt_res[1,3] |> pull(.estimate)` and a R-Squared of `r dt_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:DT-test).
 
 ```{r DT-train}
 kableExtra::kbl(show_best(DT_Train,metric='rmse',n=1) |> 
@@ -286,7 +291,7 @@ variable_importance_plot
 
 ## XGBoost
 
-$\hspace{20pt}$XGBoost was the best performing model in terms of RMSE and R-squared of all fitted models. The model's performance was also consistent across the training and testing sets, indicating that it was generalizing the predictions across the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:xgb-Predictions). The model predictions were extremely accurate with a training RMSE of `r show_best(xgb_rs,metric='rmse',n=1)[,10] |> pull(mean)` and standard error of `r show_best(xgb_rs,metric='rmse',n=1)[,12] |> pull(std_err)` displayed in Table \@ref(tab:xgb-train). XGBoost testing results were similar with an RMSE of `r xgb_tab_res[1,3] |> pull(.estimate)` and a R-Squared of `r xgb_tab_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:xgb-test). 
+$\hspace{20pt}$XGBoost was the best performing model in terms of RMSE and R-squared of all fitted models. The model's performance was also consistent across the training and testing sets, indicating that it was generalizing the predictions across the data. The model predictions between both training and testing are displayed in Figure \@ref(fig:xgb-Predictions). The model predictions were extremely accurate with a training RMSE of `r show_best(xgb_rs,metric='rmse',n=1)[,10] |> pull(mean)` and standard error of `r show_best(xgb_rs,metric='rmse',n=1)[,12] |> pull(std_err)` displayed in Table \@ref(tab:xgb-train). XGBoost testing results were similar with an RMSE of `r xgb_tab_res[1,3] |> pull(.estimate)` and a R-Squared of `r xgb_tab_res[2,3] |> pull(.estimate)` displayed in Table \@ref(tab:xgb-test).
 
 ```{r xgb-train}
 kableExtra::kbl(show_best(xgb_rs,metric='rmse',n=1) |> 
@@ -323,7 +328,6 @@ gridExtra::grid.arrange(p1,p2,ncol=2)
 ```
 
 The XGBoost model still had some pretty big missed predictions, which are displayed in Figure \@ref(fig:xgb-Predictions). The model missed predictions were mostly for cars that were priced higher than 10,000 USD. The model was not able to predict these car accurately due to the sparse data of these types of cars in the testing set.
-
 
 \newpage
 
@@ -367,18 +371,17 @@ ggplot(data = Model_Performance,
                       values = c("#F8766D","#619CFF"))
 ```
 
-
-
 \newpage
 
 # Discussion
 
-$\hspace{20pt}$In the evaluation of our machine learning models for predicting used car prices in the Pakistani market, the results present a compelling hierarchy of performance. LightGBM emerged as the frontrunner, showcasing superior predictive capabilities and an adeptness in capturing patterns within the used car sales of Pakistan. This gradient boosting ability to handle complex interactions and large datasets makes it a robust tool for addressing the intricacies of the Pakistani used car market. Following closely behind, XGBoost demonstrated commendable performance, solidifying its position as the second-best model in our study. These ensemble methods, rooted in boosting techniques, proved instrumental in navigating the multifaceted relationships between numerous features and used car prices.
+$\hspace{20pt}$In the evaluation of our machine learning models for predicting used car prices in the Pakistani market, the results present a compelling hierarchy of performance. LightGBM emerged as the front-runner, showcasing superior predictive capabilities and an adeptness in capturing patterns within the used car sales of Pakistan. This gradient boosting ability to handle complex interactions and large data sets makes it a robust tool for addressing the intricacies of the Pakistani used car market. Following closely behind, XGBoost demonstrated commendable performance, solidifying its position as the second-best model in our study. These ensemble methods, rooted in boosting techniques, proved instrumental in navigating the multifaceted relationships between numerous features and used car prices.
 
+$\hspace{20pt}$On the flip side, GLMNET and MLP, while contributing valuable insights, emerged as the less optimal models in this context. The relatively lower predictive accuracy of these models suggests potential challenges in capturing the intricate dynamics of used car pricing in Pakistan. However, it's essential to note that the apparent under performance of GLMNET and MLP serves as a constructive revelation rather than a setback. Understanding the limitations of these models is pivotal for refining predictive methodologies and informing future modeling choices. The underlying issues of both the GLMNET and MLP models were a lack of ability to capture the interaction and non-linearity certain features have on the price of a used vehicle.
 
-$\hspace{20pt}$On the flip side, GLMNET and MLP, while contributing valuable insights, emerged as the less optimal models in this context. The relatively lower predictive accuracy of these models suggests potential challenges in capturing the intricate dynamics of used car pricing in Pakistan. However, it's essential to note that the apparent under performance of GLMNET and MLP serves as a constructive revelation rather than a setback. Understanding the limitations of these models is pivotal for refining predictive methodologies and informing future modeling choices. The underlying issues of both the GLMNET and MLP models were a lack of ability to capture the interaction and nonlinearity certain features have on the price of a used vehicle.
+$\hspace{20pt}$Despite all of the considerations and insights provided by our study, it's important to note that the predictive performance of our models is not absolute. The predictive accuracy of our models is contingent on the data used for training and testing. As such, the predictive capabilities of our models are limited to the data used in our study. The predictive accuracy of our models may vary when applied to other data-sets. Furthermore, the predictive accuracy of our models is also contingent on the features used in our models. For example, our model does not consider accidents, recalls, "eye-tests," and other unknown issues that are not present in the data. The predictive accuracy of our models may vary when applied to other datasets with different features. As such, the predictive capabilities of our models are limited to the data and features used in our study as well as the various limitations of the models we chose (Appendix C).
 
-$\hspace{20pt}$In summary, our comprehensive model evaluation provides a perspective on the strengths and weaknesses of various predictive algorithms in the unique context of the Pakistani used car market. The outcomes not only identify the top-performing models but also shed light on the intricacies and challenges inherent in predicting used car prices. This understanding positions our study as a valuable resource for researchers, practitioners, and stakeholders seeking to navigate the dynamic landscape of the Pakistani used car market, fostering a continuous cycle of improvement and refinement in predictive modeling strategies.
+$\hspace{20pt}$In summary, our comprehensive model evaluation provides a perspective on the strengths and weaknesses of various predictive algorithms in the unique context of the Pakistani used car market. The outcomes not only identify the top-performing models but also shed light on the intricacies and challenges inherent in predicting used car prices. That said, our results do have some inherent limitations based both on the data available to us and the models themselves. In spite of these limitations, our findings position our study as a valuable resource for researchers, practitioners, and stakeholders seeking to navigate the dynamic landscape of the Pakistani used car market, fostering a continuous cycle of improvement and refinement in predictive modeling strategies.
 
 \newpage
 
@@ -386,22 +389,22 @@ $\hspace{20pt}$In summary, our comprehensive model evaluation provides a perspec
 
 ## Appendix A: Data Dictionary
 
-| Variable Name | Description | Type |
-|---------------|-------------|------|
-| assembly | The country where the car was assembled | Factor |
-| body | The body type of the car | Factor |
-| make | The car manufacturer | Factor |
-| model | The car model | Factor |
-| year | The year the car was manufactured | Factor |
-| engine | The engine capacity of the car | Factor |
-| transmission | The transmission type of the car | Factor |
-| fuel | The fuel type of the car | Factor |
-| color | The color of the car | Factor |
-| registered | Whether the car is registered or not | Factor |
-| mileage | The mileage of the car | Numeric |
-| price | The price of the car in Pakistani Rupees | Numeric |
-| luxury | Whether the car is a luxury car or not | Factor |
-| usd | The price of the car in US Dollars | Numeric |
+| Variable Name | Description                              | Type    |
+|---------------|------------------------------------------|---------|
+| assembly      | The country where the car was assembled  | Factor  |
+| body          | The body type of the car                 | Factor  |
+| make          | The car manufacturer                     | Factor  |
+| model         | The car model                            | Factor  |
+| year          | The year the car was manufactured        | Factor  |
+| engine        | The engine capacity of the car           | Factor  |
+| transmission  | The transmission type of the car         | Factor  |
+| fuel          | The fuel type of the car                 | Factor  |
+| color         | The color of the car                     | Factor  |
+| registered    | Whether the car is registered or not     | Factor  |
+| mileage       | The mileage of the car                   | Numeric |
+| price         | The price of the car in Pakistani Rupees | Numeric |
+| luxury        | Whether the car is a luxury car or not   | Factor  |
+| usd           | The price of the car in US Dollars       | Numeric |
 
 \newpage
 
@@ -463,7 +466,40 @@ kableExtra::kbl(all_model_performance,caption = "Model Performance Metrics",book
 
 ```
 
+## Appendix C: Models Descriptions
 
+#### Generalized Linear Model (GLM)
 
+The glmnet algorithm is applied within a workflow, specifying key tuning parameters. A 5-fold cross-validation strategy evaluates performance metrics, and the best model is selected based on the one-standard-error rule for the mixture parameter and minimum RMSE. Predictions from the top-tuned glmnet model are visualized through a calibration plot.\
++**Pros** Simple and interpret able. Can handle categorical variables well. Well-suited for linear relationships.\
+-**Cons** Assumes linear relationships between predictors and response. Can be sensitive to outliers. Can be sensitive to multicollinearity.\
 
+#### Light GBM
 
+Light GBM, configured using boost_tree, operates within a workflow with tuning parameters. A 5-fold cross-validation strategy assesses performance metrics, and the best model is chosen based on minimum rmse and highest rsq. Predictions from the top-tuned Light GBM model are visualized through a calibration plot and an autoplot depicting the relationship between trees and rmse.\
++**Pros** High-performance gradient boosting. Efficient for large datasets. Handles categorical features naturally.\
+-**Cons** Can be sensitive to outliers. Can be sensitive to multicollinearity.\
+
+#### XGBoost
+
+XGBoost is specified with tuning parameters within a workflow. A Latin Hypercube sampling grid explores hyperparameter combinations. The racing process systematically explores configurations, and the final XGBoost model, trained with optimal parameters, is evaluated using last_fit. A calibration plot visualizes the final model's performance.\
++**Pros** Handles missing data well. Regularization options to control overfitting. Feature importance analysis.\
+-**Cons** Requires careful tuning of hyperparameters. Computationally intensive. Black-box nature limits interpret ability. Sensitive to outliers. Potential for overfitting with complex models.\
+
+#### K Nearest Neighbors (KNN)
+
+The KNN model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned KNN model are visualized in a calibration plot. The final KNN model, trained with optimal hyper-parameters, is evaluated on the entire data set.\
++**Pros** No assumption about data distribution. Robust to noisy data. Simple and easy to understand.\
+-**Cons** Computationally intensive for large datasets. Sensitivity to irrelevant features. Dependency on the choice of distance metric.\
+
+#### Decision Tree
+
+The Decision Tree model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned Decision Tree model are visualized in a calibration plot. The final Decision Tree model, trained with optimal hyper-parameters, is evaluated on the entire data set.\
++**Pros** Non-linear relationships captured well. Interpret able decision rules. Robust to outliers.\
+-**Cons** Prone to over-fitting. Lack of smoothness in decision boundaries. Sensitive to small variations in data.\
+
+#### Multi-layer-Perceptron/Neural Network
+
+The Neural Network model, configured with tuning parameters, undergoes a racing process, selecting the best-performing model based on minimum RMSE. Predictions from the top-tuned Neural Network model are visualized in a calibration plot. The final Neural Network model is evaluated on a testing data set, with a scatter plot visualizing predicted versus true values.\
++**Pros** Captures complex non-linear patterns. Suitable for image and text data. Can learn hierarchical features.\
+-**Cons** Requires large amounts of data. Prone to over-fitting. Computationally intensive. Black-box nature makes interpretation challenging.
